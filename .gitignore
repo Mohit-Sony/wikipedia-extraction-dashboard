@@ -10,3 +10,4 @@ logs
 *.db-wal
 *.log
 pipeline_state
+pipeline_state.pkl
