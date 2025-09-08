@@ -9,3 +9,4 @@ logs
 *.db-shm
 *.db-wal
 *.log
+pipeline_state
