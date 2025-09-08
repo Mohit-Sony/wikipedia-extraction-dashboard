@@ -11,3 +11,4 @@ logs
 *.log
 pipeline_state
 pipeline_state.pkl
+pipeline_states
