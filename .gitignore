@@ -1,0 +1,11 @@
+*.json
+*.csv
+cache
+cache/*
+wikipedia_data
+node_modules
+logs
+*.db
+*.db-shm
+*.db-wal
+*.log
