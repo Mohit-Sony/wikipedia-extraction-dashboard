@@ -1,5 +1,5 @@
 # backend/database/models.py
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Float, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Float, Boolean, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -25,6 +25,7 @@ class Entity(Base):
     status = Column(String, default="unprocessed", index=True)  # unprocessed, queued, processing, completed, failed, rejected
     parent_qid = Column(String, index=True)
     depth = Column(Integer, default=0, index=True)
+    discovered_by = Column(String, index=True)  # NEW - QID of entity that discovered this one
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -37,13 +38,14 @@ class QueueEntry(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     qid = Column(String, ForeignKey("entities.qid"), nullable=False)
-    queue_type = Column(String, nullable=False, index=True)  # active, rejected, on_hold, completed, failed
+    queue_type = Column(String, nullable=False, index=True)  # active, rejected, on_hold, completed, failed, review, processing
     priority = Column(Integer, default=1)  # 1=high, 2=medium, 3=low
     position = Column(Integer, default=0)
     added_by = Column(String, default="system")
     added_date = Column(DateTime, default=datetime.utcnow)
     processed_date = Column(DateTime)
     notes = Column(Text)
+    discovery_source = Column(String, index=True)  # NEW - QID of parent entity that discovered this
     
     # Relationships
     entity = relationship("Entity", back_populates="queue_entries")
@@ -58,8 +60,11 @@ class ExtractionSession(Base):
     total_extracted = Column(Integer, default=0)
     total_errors = Column(Integer, default=0)
     total_duplicates = Column(Integer, default=0)
+    total_skipped = Column(Integer, default=0)  # NEW - Smart deduplication count
     config_snapshot = Column(Text)  # JSON string of pipeline config
-    status = Column(String, default="active")  # active, completed, paused, failed
+    status = Column(String, default="active")  # active, completed, paused, cancelled, failed
+    current_entity_qid = Column(String)  # NEW - Currently processing entity
+    progress_percentage = Column(Float, default=0)  # NEW - Current progress
     
     # Relationships
     user_decisions = relationship("UserDecision", back_populates="session")
@@ -70,10 +75,11 @@ class UserDecision(Base):
     id = Column(Integer, primary_key=True, index=True)
     qid = Column(String, ForeignKey("entities.qid"), nullable=False)
     session_id = Column(Integer, ForeignKey("extraction_sessions.id"))
-    decision_type = Column(String, nullable=False)  # queue_add, queue_remove, priority_change, reject, approve
+    decision_type = Column(String, nullable=False)  # queue_add, queue_remove, priority_change, reject, approve, skip_duplicate
     decision_value = Column(String)  # queue name, priority level, etc.
     timestamp = Column(DateTime, default=datetime.utcnow)
     reasoning = Column(Text)
+    auto_decision = Column(Boolean, default=False)  # NEW - True if decision made by smart deduplication
     
     # Relationships
     entity = relationship("Entity", back_populates="user_decisions")
@@ -84,8 +90,22 @@ class UserPreference(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String, default="default")
-    preference_type = Column(String, nullable=False)  # filter_template, auto_rule, ui_setting
+    preference_type = Column(String, nullable=False)  # filter_template, auto_rule, ui_setting, extraction_config
     preference_name = Column(String, nullable=False)
     preference_value = Column(Text, nullable=False)  # JSON string
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class ExtractionLog(Base):
+    __tablename__ = "extraction_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("extraction_sessions.id"))
+    qid = Column(String, nullable=False)
+    event_type = Column(String, nullable=False)  # started, completed, failed, skipped, discovered_links
+    event_data = Column(JSON)  # Additional event data
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    message = Column(Text)
+    
+    # Relationships
+    session = relationship("ExtractionSession")

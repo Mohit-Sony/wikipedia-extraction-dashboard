@@ -1,4 +1,4 @@
-# backend/main.py
+# backend/main.py - UPDATED with extraction service integration
 from fastapi import FastAPI, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -12,11 +12,12 @@ from database.database import init_database, get_db
 from database.models import Entity
 
 # API routers
-from api import entities, queues, analytics, websocket
+from api import entities, queues, analytics, websocket, extraction  # NEW: extraction
 
 # Services
 from services.file_service import FileService
 from services.sync_service import SyncService
+from services.extraction_service import extraction_service  # NEW
 
 # Configure logging
 logging.basicConfig(
@@ -44,6 +45,10 @@ async def lifespan(app: FastAPI):
     app.state.file_service = file_service
     app.state.sync_service = SyncService(file_service)
     
+    # NEW: Initialize extraction service with WebSocket integration
+    app.state.extraction_service = extraction_service
+    extraction_service.set_websocket_manager(websocket.manager)
+    
     # Perform initial sync if database is empty
     from database.database import SessionLocal
     db = SessionLocal()
@@ -64,12 +69,23 @@ async def lifespan(app: FastAPI):
     
     # Shutdown
     logger.info("Shutting down Dashboard API...")
+    
+    # NEW: Cancel any running extraction
+    if extraction_service.is_running:
+        db = SessionLocal()
+        try:
+            await extraction_service.cancel_extraction(db)
+            logger.info("Active extraction cancelled during shutdown")
+        except Exception as e:
+            logger.error(f"Error cancelling extraction during shutdown: {e}")
+        finally:
+            db.close()
 
 # Create FastAPI app
 app = FastAPI(
     title="Wikipedia Extraction Dashboard API",
-    description="API for managing Wikipedia data extraction pipeline",
-    version="1.0.0",
+    description="API for managing Wikipedia data extraction pipeline with smart deduplication",
+    version="2.0.0",
     lifespan=lifespan
 )
 
@@ -87,13 +103,21 @@ app.include_router(entities.router, prefix="/api/v1", tags=["entities"])
 app.include_router(queues.router, prefix="/api/v1", tags=["queues"])
 app.include_router(analytics.router, prefix="/api/v1", tags=["analytics"])
 app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
+app.include_router(extraction.router, prefix="/api/v1", tags=["extraction"])  # NEW
 
 # Root endpoint
 @app.get("/")
 async def root():
     return {
-        "message": "Wikipedia Extraction Dashboard API",
-        "version": "1.0.0",
+        "message": "Wikipedia Extraction Dashboard API v2.0",
+        "version": "2.0.0",
+        "features": [
+            "Smart deduplication during link discovery",
+            "Real-time extraction monitoring",
+            "Manual entity entry",
+            "Review queue management",
+            "Batch operations with deduplication"
+        ],
         "docs": "/docs",
         "websocket": "/api/v1/ws"
     }
@@ -108,6 +132,9 @@ async def health_check(db: Session = Depends(get_db)):
         # Check file service
         file_stats = app.state.file_service.get_directory_stats()
         
+        # Check extraction service status
+        extraction_status = extraction_service.get_extraction_status(db)
+        
         return {
             "status": "healthy",
             "database": {
@@ -118,6 +145,11 @@ async def health_check(db: Session = Depends(get_db)):
                 "accessible": True,
                 "total_entities": file_stats.get("total_entities", 0),
                 "total_size_mb": round(file_stats.get("total_size_mb", 0), 2)
+            },
+            "extraction_service": {
+                "status": extraction_status.get("status", "idle"),
+                "session_id": extraction_status.get("session_id"),
+                "current_entity": extraction_status.get("current_entity")
             }
         }
     except Exception as e:
@@ -205,7 +237,7 @@ async def validate_system(db: Session = Depends(get_db)):
             "status": "error"
         }
 
-# Pipeline integration endpoints
+# NEW: Pipeline integration endpoints for external extraction pipeline
 @app.post("/api/v1/pipeline/entity-extracted")
 async def entity_extracted_notification(
     entity_data: dict,
@@ -244,6 +276,51 @@ async def pipeline_progress_update(progress_data: dict):
         logger.error(f"Progress update failed: {e}")
         return {"status": "error", "message": str(e)}
 
+# NEW: Deduplication statistics endpoint
+@app.get("/api/v1/deduplication/stats")
+async def get_deduplication_stats(db: Session = Depends(get_db)):
+    """Get smart deduplication statistics"""
+    try:
+        from utils.schemas import QueueType
+        from sqlalchemy import func
+        
+        # Get counts by decision type for auto decisions
+        auto_decisions = db.query(
+            UserDecision.decision_value,
+            func.count(UserDecision.id).label('count')
+        ).filter(
+            UserDecision.auto_decision == True,
+            UserDecision.decision_type.in_(["skip_duplicate", "discovered_link"])
+        ).group_by(UserDecision.decision_value).all()
+        
+        # Get review queue stats
+        review_queue_count = db.query(QueueEntry).filter(
+            QueueEntry.queue_type == QueueType.REVIEW.value
+        ).count()
+        
+        # Get discovery sources in review queue
+        discovery_sources = db.query(
+            QueueEntry.discovery_source,
+            func.count(QueueEntry.id).label('count')
+        ).filter(
+            QueueEntry.queue_type == QueueType.REVIEW.value,
+            QueueEntry.discovery_source.isnot(None)
+        ).group_by(QueueEntry.discovery_source).all()
+        
+        return {
+            "auto_decisions": {decision.decision_value: decision.count for decision in auto_decisions},
+            "review_queue_count": review_queue_count,
+            "discovery_sources_count": len(discovery_sources),
+            "top_discovery_sources": [
+                {"qid": source.discovery_source, "count": source.count}
+                for source in discovery_sources[:10]
+            ]
+        }
+        
+    except Exception as e:
+        logger.error(f"Deduplication stats failed: {e}")
+        return {"error": str(e)}
+
 # Statistics endpoints
 @app.get("/api/v1/system/stats")
 async def get_system_stats(db: Session = Depends(get_db)):
@@ -260,6 +337,9 @@ async def get_system_stats(db: Session = Depends(get_db)):
             "active_connections": websocket.manager.get_connection_count()
         }
         
+        # NEW: Extraction service stats
+        extraction_status = extraction_service.get_extraction_status(db)
+        
         return {
             "database": {
                 "total_entities": entity_count,
@@ -267,6 +347,11 @@ async def get_system_stats(db: Session = Depends(get_db)):
             },
             "file_system": file_stats,
             "websocket": ws_stats,
+            "extraction": {
+                "status": extraction_status.get("status", "idle"),
+                "session_id": extraction_status.get("session_id"),
+                "progress": extraction_status.get("progress_percentage", 0)
+            },
             "system": {
                 "status": "operational",
                 "uptime": "N/A"  # Could be calculated from startup time

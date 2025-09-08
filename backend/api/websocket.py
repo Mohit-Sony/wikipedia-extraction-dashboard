@@ -1,8 +1,11 @@
-# backend/api/websocket.py
+# backend/api/websocket.py - UPDATED with extraction events
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.orm import Session
 from database.database import get_db
-from utils.schemas import WebSocketMessage, EntityProcessedMessage, QueueUpdatedMessage
+from utils.schemas import (
+    WebSocketMessage, EntityProcessedMessage, QueueUpdatedMessage,
+    ExtractionProgressUpdate, DiscoveredLinksUpdate
+)
 from typing import List, Dict, Any
 import json
 import logging
@@ -193,26 +196,74 @@ async def notify_queue_updated(queue_type: str, change_data: Dict[str, Any]):
     
     await manager.broadcast_to_filtered(message, should_send)
 
+# NEW: Extraction-specific notification functions
+
 async def notify_extraction_progress(progress_data: Dict[str, Any]):
-    """Notify all connected clients about extraction progress"""
+    """Notify clients about extraction progress"""
     message = {
         "type": "extraction_progress",
         "data": {
-            "current": progress_data.get("current", 0),
-            "total": progress_data.get("total", 0),
-            "percentage": progress_data.get("percentage", 0),
-            "eta": progress_data.get("eta"),
-            "current_entity": progress_data.get("current_entity"),
+            "session_id": progress_data.get("session_id"),
+            "current_entity_qid": progress_data.get("current_entity_qid"),
+            "current_entity_title": progress_data.get("current_entity_title"),
+            "progress_percentage": progress_data.get("progress_percentage", 0),
+            "processed_count": progress_data.get("processed_count", 0),
+            "total_count": progress_data.get("total_count", 0),
+            "discovered_links": progress_data.get("discovered_links", 0),
+            "skipped_duplicates": progress_data.get("skipped_duplicates", 0),
             "timestamp": datetime.utcnow().isoformat()
         }
     }
     
-    # Filter to clients subscribed to progress updates
+    # Filter to clients subscribed to extraction updates
     def should_send(conn_info):
         subs = conn_info.get("subscriptions", [])
-        return "progress" in subs or "all" in subs
+        return "extraction" in subs or "progress" in subs or "all" in subs
     
     await manager.broadcast_to_filtered(message, should_send)
+
+async def notify_links_discovered(discovery_data: Dict[str, Any]):
+    """Notify clients about newly discovered links"""
+    message = {
+        "type": "links_discovered",
+        "data": {
+            "session_id": discovery_data.get("session_id"),
+            "parent_qid": discovery_data.get("parent_qid"),
+            "parent_title": discovery_data.get("parent_title"),
+            "discovered_count": discovery_data.get("discovered_count", 0),
+            "added_to_review": discovery_data.get("added_to_review", 0),
+            "skipped_duplicates": discovery_data.get("skipped_duplicates", 0),
+            "skipped_reasons": discovery_data.get("skipped_reasons", {}),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    }
+    
+    # Filter to clients subscribed to discovery updates
+    def should_send(conn_info):
+        subs = conn_info.get("subscriptions", [])
+        return "discovery" in subs or "extraction" in subs or "all" in subs
+    
+    await manager.broadcast_to_filtered(message, should_send)
+
+async def notify_extraction_status_change(status_data: Dict[str, Any]):
+    """Notify clients about extraction status changes"""
+    message = {
+        "type": "extraction_status_change",
+        "data": {
+            "status": status_data.get("status", ""),
+            "session_id": status_data.get("session_id"),
+            "session_name": status_data.get("session_name"),
+            "message": status_data.get("message", ""),
+            "config": status_data.get("config", {}),
+            "total_extracted": status_data.get("total_extracted", 0),
+            "total_errors": status_data.get("total_errors", 0),
+            "total_skipped": status_data.get("total_skipped", 0),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    }
+    
+    # Broadcast to all connected clients
+    await manager.broadcast(message)
 
 async def notify_batch_operation_complete(operation_data: Dict[str, Any]):
     """Notify clients when batch operations complete"""
@@ -222,6 +273,7 @@ async def notify_batch_operation_complete(operation_data: Dict[str, Any]):
             "operation": operation_data.get("operation", ""),
             "success_count": operation_data.get("success_count", 0),
             "error_count": operation_data.get("error_count", 0),
+            "skipped_count": operation_data.get("skipped_count", 0),  # NEW
             "total_processed": operation_data.get("total_processed", 0),
             "timestamp": datetime.utcnow().isoformat()
         }
@@ -231,6 +283,30 @@ async def notify_batch_operation_complete(operation_data: Dict[str, Any]):
     def should_send(conn_info):
         subs = conn_info.get("subscriptions", [])
         return "batch_operations" in subs or "all" in subs
+    
+    await manager.broadcast_to_filtered(message, should_send)
+
+async def notify_deduplication_stats(dedup_data: Dict[str, Any]):
+    """Notify clients about deduplication statistics"""
+    message = {
+        "type": "deduplication_stats",
+        "data": {
+            "session_id": dedup_data.get("session_id"),
+            "parent_qid": dedup_data.get("parent_qid"),
+            "total_checked": dedup_data.get("total_checked", 0),
+            "already_completed": dedup_data.get("already_completed", 0),
+            "already_rejected": dedup_data.get("already_rejected", 0),
+            "already_in_queue": dedup_data.get("already_in_queue", 0),
+            "total_skipped": dedup_data.get("total_skipped", 0),
+            "newly_added": dedup_data.get("newly_added", 0),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    }
+    
+    # Filter to clients subscribed to deduplication updates
+    def should_send(conn_info):
+        subs = conn_info.get("subscriptions", [])
+        return "deduplication" in subs or "extraction" in subs or "all" in subs
     
     await manager.broadcast_to_filtered(message, should_send)
 
@@ -257,6 +333,7 @@ async def notify_error_occurred(error_data: Dict[str, Any]):
             "error_type": error_data.get("error_type", ""),
             "error_message": error_data.get("error_message", ""),
             "qid": error_data.get("qid"),
+            "session_id": error_data.get("session_id"),
             "timestamp": datetime.utcnow().isoformat()
         }
     }

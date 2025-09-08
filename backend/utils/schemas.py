@@ -12,6 +12,7 @@ class QueueType(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     PROCESSING = "processing"
+    REVIEW = "review"  # NEW - For discovered links awaiting decision
 
 class EntityStatus(str, Enum):
     UNPROCESSED = "unprocessed"
@@ -20,6 +21,14 @@ class EntityStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     REJECTED = "rejected"
+
+class ExtractionStatus(str, Enum):  # NEW
+    IDLE = "idle"
+    RUNNING = "running"
+    PAUSED = "paused"
+    CANCELLED = "cancelled"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 class Priority(int, Enum):
     HIGH = 1
@@ -40,6 +49,7 @@ class EntityBase(BaseModel):
     parent_qid: Optional[str] = None
     depth: int = 0
     status: EntityStatus = EntityStatus.UNPROCESSED
+    discovered_by: Optional[str] = None  # NEW
 
 class EntityCreate(EntityBase):
     file_path: str
@@ -76,12 +86,28 @@ class EntityPreview(BaseModel):
     links: Dict[str, Any]
     metadata: Dict[str, Any]
 
+# Manual Entity Entry Schemas - NEW
+class ManualEntityCreate(BaseModel):
+    title: str
+    type: Optional[str] = "unknown"
+    short_desc: Optional[str] = None
+    add_to_queue: QueueType = QueueType.ACTIVE
+    priority: Priority = Priority.MEDIUM
+
+class ManualEntityResponse(BaseModel):
+    qid: str
+    title: str
+    type: str
+    queue_type: QueueType
+    message: str
+
 # Queue schemas
 class QueueEntryBase(BaseModel):
     qid: str
     queue_type: QueueType
     priority: Priority = Priority.MEDIUM
     notes: Optional[str] = None
+    discovery_source: Optional[str] = None  # NEW
 
 class QueueEntryCreate(QueueEntryBase):
     pass
@@ -104,7 +130,7 @@ class QueueEntryResponse(QueueEntryBase):
 
 # Batch operation schemas
 class BatchOperation(BaseModel):
-    operation: str  # move, delete, update_priority, update_status
+    operation: str  # move, delete, update_priority, update_status, approve_review, reject_review
     qids: List[str]
     target_queue: Optional[QueueType] = None
     priority: Optional[Priority] = None
@@ -113,7 +139,55 @@ class BatchOperation(BaseModel):
 class BatchOperationResult(BaseModel):
     success_count: int
     error_count: int
+    skipped_count: int = 0  # NEW - Smart deduplication skip count
     errors: List[Dict[str, str]]
+
+# Extraction Schemas - NEW
+class ExtractionConfig(BaseModel):
+    max_depth: int = 3
+    batch_size: int = 10
+    max_workers: int = 5
+    pause_between_requests: float = 1.0
+    enable_deduplication: bool = True
+    retry_attempts: int = 3
+    auto_add_to_review: bool = True  # Auto-add discovered links to review queue
+
+class ExtractionStartRequest(BaseModel):
+    queue_types: List[QueueType] = [QueueType.ACTIVE]
+    config: Optional[ExtractionConfig] = None
+    session_name: Optional[str] = None
+
+class ExtractionStatusResponse(BaseModel):
+    status: ExtractionStatus
+    session_id: Optional[int] = None
+    current_entity: Optional[str] = None
+    progress_percentage: float = 0
+    total_entities: int = 0
+    processed_entities: int = 0
+    failed_entities: int = 0
+    skipped_entities: int = 0
+    discovered_entities: int = 0
+    start_time: Optional[datetime] = None
+    estimated_completion: Optional[datetime] = None
+
+class ExtractionProgressUpdate(BaseModel):  # NEW - For WebSocket updates
+    session_id: int
+    current_entity_qid: str
+    current_entity_title: str
+    progress_percentage: float
+    processed_count: int
+    total_count: int
+    discovered_links: int = 0
+    skipped_duplicates: int = 0
+
+class DiscoveredLinksUpdate(BaseModel):  # NEW - For WebSocket updates
+    session_id: int
+    parent_qid: str
+    parent_title: str
+    discovered_count: int
+    added_to_review: int
+    skipped_duplicates: int
+    skipped_reasons: Dict[str, int]  # reason -> count
 
 # Filter schemas
 class EntityFilter(BaseModel):
@@ -122,6 +196,7 @@ class EntityFilter(BaseModel):
     status: Optional[List[EntityStatus]] = None
     queue_type: Optional[List[QueueType]] = None
     parent_qid: Optional[str] = None
+    discovered_by: Optional[str] = None  # NEW
     depth_min: Optional[int] = None
     depth_max: Optional[int] = None
     links_min: Optional[int] = None
@@ -153,9 +228,19 @@ class DashboardStats(BaseModel):
     total_processed: int
     total_pending: int
     total_failed: int
+    total_in_review: int  # NEW
     queue_stats: List[QueueStats]
     type_stats: List[TypeStats]
     recent_activity: List[EntityResponse]
+    active_extraction: Optional[ExtractionStatusResponse] = None  # NEW
+
+class DeduplicationStats(BaseModel):  # NEW
+    total_checked: int
+    already_completed: int
+    already_rejected: int
+    already_in_queue: int
+    total_skipped: int
+    newly_added: int
 
 # WebSocket message schemas
 class WebSocketMessage(BaseModel):
@@ -170,3 +255,9 @@ class QueueUpdatedMessage(WebSocketMessage):
     
 class ExtractionProgressMessage(WebSocketMessage):
     type: str = "extraction_progress"
+
+class LinksDiscoveredMessage(WebSocketMessage):  # NEW
+    type: str = "links_discovered"
+
+class ExtractionStatusMessage(WebSocketMessage):  # NEW
+    type: str = "extraction_status_changed"
