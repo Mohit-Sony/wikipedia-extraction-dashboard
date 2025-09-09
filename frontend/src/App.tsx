@@ -60,7 +60,7 @@ const AppContent: React.FC = () => {
           <Route path="/queues" element={<QueueManager />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/system" element={<SystemStatus />} />
-          <Route path="/extractio" element={<ExtractionManager />} />
+          <Route path="/extraction" element={<ExtractionManager />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </MainLayout>
