@@ -425,10 +425,10 @@ export const ReviewQueue: React.FC = () => {
               style={{ width: '100%' }}
             >
               {sourcesData?.sources.map(source => (
-                <Option key={source.source} value={source.source}>
+                <Option key={source.last_discovery} value={source.title}>
                   <Space>
-                    {getDiscoverySourceIcon(source.source)}
-                    {source.source.replace('_', ' ')} ({source.count})
+                    {getDiscoverySourceIcon(source.title)}
+                    {source.title?.replace('_', ' ') || 'Unknown'}: {source.discovered_count}
                   </Space>
                 </Option>
               ))}
@@ -489,15 +489,15 @@ export const ReviewQueue: React.FC = () => {
             <Space wrap>
               {sourcesData.sources.map(source => (
                 <Tag
-                  key={source.source || 'unknown'}
-                  icon={getDiscoverySourceIcon(source.source)}
-                  color={discoverySourceFilter === source.source ? 'blue' : 'default'}
+                  key={source.title || 'unknown'}
+                  icon={getDiscoverySourceIcon(source.title)}
+                  color={discoverySourceFilter === source.type ? 'blue' : 'default'}
                   style={{ cursor: 'pointer' }}
                   onClick={() => setDiscoverySourceFilter(
-                    discoverySourceFilter === source.source ? undefined : source.source
+                    discoverySourceFilter === source.qid ? undefined : source.qid
                   )}
                 >
-                  {source.source?.replace('_', ' ') || 'Unknown'}: {source.count}
+                  {source.title}: {source.discovered_count}
                 </Tag>
               ))}
             </Space>

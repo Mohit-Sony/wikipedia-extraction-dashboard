@@ -247,6 +247,7 @@ export const QueueManager: React.FC = () => {
 {/* // Add conditional rendering for review queue: */}
         {selectedQueue === QueueType.REVIEW ? (
           <ReviewQueue />
+          // <h1>simple</h1>
         ) : (<>
           {queueData?.entries?.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px 0', color: '#999' }}>
