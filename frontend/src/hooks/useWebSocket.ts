@@ -174,35 +174,33 @@ export const useWebSocket = () => {
     dispatch(api.util.invalidateTags(['Extraction', 'Queue']))
     
     // Show progress notification (less frequent to avoid spam)
-    if (data.entities_processed % 10 === 0 || data.status !== 'running') {
-      const progressPercent = data.queue_size > 0 
-        ? Math.round((data.entities_processed / (data.entities_processed + data.queue_size)) * 100)
-        : 100
+    if (data.progress_percentage % 10 === 0 || data.progress_percentage <= 100) {
+      const progressPercent = data.progress_percentage  
 
       dispatch(addInfoNotification({
         title: 'Extraction Progress',
-        message: `Processing ${data.current_entity} - ${data.entities_processed} processed (${progressPercent}%)`,
+        message: `Processing ${data.current_entity_qid} - ${data.current_entity_title} done - ${data.processed_count} processed (${progressPercent}%)`,
         duration: 3000
       }))
     }
 
     // Show completion notification
-    if (data.status === 'completed') {
+    if (data.progress_percentage === 100) {
       dispatch(addSuccessNotification({
         title: 'Extraction Completed',
-        message: `Successfully processed ${data.entities_processed} entities`,
+        message: `Successfully processed ${data.processed_count} entities`,
         duration: 6000
       }))
     }
 
-    // Show error notification
-    if (data.status === 'error') {
-      dispatch(addErrorNotification({
-        title: 'Extraction Error',
-        message: `Extraction stopped due to error at entity: ${data.current_entity}`,
-        duration: 0
-      }))
-    }
+    // // Show error notification
+    // if (data.status === 'error') {
+    //   dispatch(addErrorNotification({
+    //     title: 'Extraction Error',
+    //     message: `Extraction stopped due to error at entity: ${data.current_entity}`,
+    //     duration: 0
+    //   }))
+    // }
   }, [dispatch])
 
   const handleLinksDiscovered = useCallback((event: LinksDiscoveredEvent) => {

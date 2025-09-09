@@ -33,7 +33,7 @@ pip install "fastapi[standard]" "uvicorn[standard]" sqlalchemy pandas openpyxl a
 # For development (optional):
 pip install pytest pytest-asyncio httpx black ruff mypy
 ```
-
+cd backend && python -m venv fresh_venv && source fresh_venv/bin/activate && pip install fastapi uvicorn sqlalchemy pandas "numpy<2.0" python-multipart websockets aiohttp beautifulsoup4  && python main.py
 ## 2. Directory Structure Setup
 
 Ensure your backend directory structure matches:

@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 
 # Database setup
 from database.database import init_database, get_db
-from database.models import Entity
+from database.models import Entity,UserDecision,QueueEntry
 
 # API routers
 from api import entities, queues, analytics, websocket, extraction  # NEW: extraction

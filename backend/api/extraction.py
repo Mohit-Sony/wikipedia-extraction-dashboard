@@ -42,6 +42,10 @@ async def start_extraction(
         config = request.config or ExtractionConfig()
         
         # Start extraction
+        # print(    >>>>>>>>        db,
+        #     request.queue_types,
+        #     " >>>>>>>>>> config ",config,
+        #     " >>>>>>>>>> session_name" , request.session_name)
         session_id = await extraction_service.start_extraction(
             db=db,
             queue_types=request.queue_types,

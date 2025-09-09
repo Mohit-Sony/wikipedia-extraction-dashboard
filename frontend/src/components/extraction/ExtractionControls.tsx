@@ -1,5 +1,5 @@
-// src/components/extraction/ExtractionControls.tsx
-import React, { useState } from 'react'
+// src/components/extraction/ExtractionControls.tsx - FIXED VERSION
+import React, { useState, useEffect } from 'react'
 import { 
   Card, 
   Button, 
@@ -16,7 +16,10 @@ import {
   Modal,
   Select,
   Tag,
-  message
+  message,
+  Statistic,
+  Badge,
+  Tooltip
 } from 'antd'
 import {
   PlayCircleOutlined,
@@ -26,7 +29,10 @@ import {
   RocketOutlined,
   InfoCircleOutlined,
   CheckCircleOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  ClockCircleOutlined,
+  DatabaseOutlined,
+  TeamOutlined
 } from '@ant-design/icons'
 import {
   useGetExtractionStatusQuery,
@@ -36,41 +42,101 @@ import {
   usePauseExtractionMutation,
   useResumeExtractionMutation,
   useCancelExtractionMutation,
-  useGetQueueEntitiesQuery
+  useGetQueueEntitiesQuery,
+  useGetAllQueuesQuery
 } from '../../store/api'
-import { ExtractionStatus, QueueType, ExtractionConfig } from '../../types'
+import { ExtractionStatus, QueueType } from '../../types'
 
 const { Title, Text } = Typography
 const { Option } = Select
+
+interface QueueOption {
+  key: QueueType
+  label: string
+  color: string
+  icon: React.ReactNode
+  description: string
+}
+
+const QUEUE_OPTIONS: QueueOption[] = [
+  {
+    key: QueueType.ACTIVE,
+    label: 'Active Queue',
+    color: 'green',
+    icon: <PlayCircleOutlined />,
+    description: 'Entities ready for immediate extraction'
+  },
+  {
+    key: QueueType.ON_HOLD,
+    label: 'On Hold Queue', 
+    color: 'orange',
+    icon: <ClockCircleOutlined />,
+    description: 'Entities temporarily paused'
+  },
+  {
+    key: QueueType.REVIEW,
+    label: 'Review Queue',
+    color: 'blue', 
+    icon: <TeamOutlined />,
+    description: 'Newly discovered entities awaiting review'
+  }
+]
 
 export const ExtractionControls: React.FC = () => {
   const [form] = Form.useForm()
   const [configModalOpen, setConfigModalOpen] = useState(false)
   const [startModalOpen, setStartModalOpen] = useState(false)
-  const [selectedEntities, setSelectedEntities] = useState<string[]>([])
+  const [selectedQueues, setSelectedQueues] = useState<QueueType[]>([QueueType.ACTIVE])
   const [sessionName, setSessionName] = useState('')
 
-  const { data: statusData } = useGetExtractionStatusQuery()
+  // API Hooks
+  const { data: statusData, refetch: refetchStatus } = useGetExtractionStatusQuery()
   const { data: configData } = useGetExtractionConfigQuery()
-  const { data: activeQueueData } = useGetQueueEntitiesQuery({ 
-    queue_type: QueueType.ACTIVE,
-    limit: 100 
-  })
+  const { data: allQueuesData } = useGetAllQueuesQuery()
 
+  // Mutations
   const [configureExtraction, { isLoading: configuring }] = useConfigureExtractionMutation()
   const [startExtraction, { isLoading: starting }] = useStartExtractionMutation()
   const [pauseExtraction, { isLoading: pausing }] = usePauseExtractionMutation()
   const [resumeExtraction, { isLoading: resuming }] = useResumeExtractionMutation()
   const [cancelExtraction, { isLoading: cancelling }] = useCancelExtractionMutation()
 
+  // Status and session info
   const status = statusData?.status || ExtractionStatus.IDLE
   const session = statusData?.current_session
+  const progress = statusData?.progress
 
-  const canStart = status === ExtractionStatus.IDLE && selectedEntities.length > 0
+  // Button states
+  const canStart = status === ExtractionStatus.IDLE && selectedQueues.length > 0
   const canPause = status === ExtractionStatus.RUNNING
   const canResume = status === ExtractionStatus.PAUSED
   const canCancel = [ExtractionStatus.RUNNING, ExtractionStatus.PAUSED].includes(status)
 
+  // Auto-generate session name
+  useEffect(() => {
+    if (!sessionName && startModalOpen) {
+      const timestamp = new Date().toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric', 
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      })
+      setSessionName(`Extraction ${timestamp}`)
+    }
+  }, [startModalOpen, sessionName])
+
+  // Get total entities count for selected queues
+  const getTotalEntitiesForQueues = (): number => {
+    if (!allQueuesData) return 0
+    
+    return selectedQueues.reduce((total, queueType) => {
+      const queueData = allQueuesData[queueType]
+      return total + (queueData?.count || 0)
+    }, 0)
+  }
+
+  // Handlers
   const handleConfigSave = async () => {
     try {
       const values = await form.validateFields()
@@ -88,19 +154,31 @@ export const ExtractionControls: React.FC = () => {
       return
     }
 
+    if (selectedQueues.length === 0) {
+      message.error('Please select at least one queue to process')
+      return
+    }
+
+    const totalEntities = getTotalEntitiesForQueues()
+    if (totalEntities === 0) {
+      message.error('Selected queues are empty. Add entities to queues first.')
+      return
+    }
+
     try {
       const result = await startExtraction({
-        entities: selectedEntities,
+        queue_types: selectedQueues,
         session_name: sessionName,
         config: configData
       }).unwrap()
       
       message.success(`Extraction started - Session ID: ${result.session_id}`)
       setStartModalOpen(false)
-      setSelectedEntities([])
+      setSelectedQueues([QueueType.ACTIVE])
       setSessionName('')
-    } catch (error) {
-      message.error('Failed to start extraction')
+    } catch (error: any) {
+      const errorMsg = error?.data?.detail || 'Failed to start extraction'
+      message.error(errorMsg)
     }
   }
 
@@ -108,8 +186,9 @@ export const ExtractionControls: React.FC = () => {
     try {
       await pauseExtraction().unwrap()
       message.success('Extraction paused')
-    } catch (error) {
-      message.error('Failed to pause extraction')
+    } catch (error: any) {
+      const errorMsg = error?.data?.detail || 'Failed to pause extraction'
+      message.error(errorMsg)
     }
   }
 
@@ -117,8 +196,9 @@ export const ExtractionControls: React.FC = () => {
     try {
       await resumeExtraction().unwrap()
       message.success('Extraction resumed')
-    } catch (error) {
-      message.error('Failed to resume extraction')
+    } catch (error: any) {
+      const errorMsg = error?.data?.detail || 'Failed to resume extraction'
+      message.error(errorMsg)
     }
   }
 
@@ -133,8 +213,9 @@ export const ExtractionControls: React.FC = () => {
         try {
           await cancelExtraction().unwrap()
           message.success('Extraction cancelled')
-        } catch (error) {
-          message.error('Failed to cancel extraction')
+        } catch (error: any) {
+          const errorMsg = error?.data?.detail || 'Failed to cancel extraction'
+          message.error(errorMsg)
         }
       }
     })
@@ -159,6 +240,14 @@ export const ExtractionControls: React.FC = () => {
     }
   }
 
+  const getQueueStats = (queueType: QueueType) => {
+    const queueData = allQueuesData?.[queueType]
+    return {
+      count: queueData?.count || 0,
+      recent: queueData?.recent_entries?.length || 0
+    }
+  }
+
   return (
     <>
       <Card 
@@ -174,6 +263,7 @@ export const ExtractionControls: React.FC = () => {
             <Button 
               icon={<SettingOutlined />}
               onClick={() => setConfigModalOpen(true)}
+              disabled={status === ExtractionStatus.RUNNING}
             >
               Configure
             </Button>
@@ -186,7 +276,8 @@ export const ExtractionControls: React.FC = () => {
             message={`Active Session: ${session.session_name}`}
             description={`Started: ${new Date(session.start_time).toLocaleString()} | 
                          Extracted: ${session.total_extracted} | 
-                         Errors: ${session.total_errors}`}
+                         Errors: ${session.total_errors} | 
+                         Skipped: ${session?.total_duplicates || 0}`}
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
@@ -245,57 +336,54 @@ export const ExtractionControls: React.FC = () => {
         {/* Quick Stats */}
         <Divider />
         <Row gutter={16}>
-          <Col span={8}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1890ff' }}>
-                {activeQueueData?.total || 0}
-              </div>
-              <div style={{ fontSize: 12, color: '#666' }}>Active Queue</div>
-            </div>
-          </Col>
-          <Col span={8}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 24, fontWeight: 'bold', color: '#52c41a' }}>
-                {session?.total_extracted || 0}
-              </div>
-              <div style={{ fontSize: 12, color: '#666' }}>Extracted</div>
-            </div>
-          </Col>
-          <Col span={8}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}>
-                {session?.total_errors || 0}
-              </div>
-              <div style={{ fontSize: 12, color: '#666' }}>Errors</div>
-            </div>
-          </Col>
+          {QUEUE_OPTIONS.map((queue) => {
+            const stats = getQueueStats(queue.key)
+            return (
+              <Col span={8} key={queue.key}>
+                <Statistic
+                  title={
+                    <Space>
+                      {queue.icon}
+                      <Text>{queue.label}</Text>
+                    </Space>
+                  }
+                  value={stats.count}
+                  valueStyle={{ color: stats.count > 0 ? '#3f8600' : '#8c8c8c' }}
+                  suffix="entities"
+                />
+              </Col>
+            )
+          })}
         </Row>
 
-        {/* Current Config Display */}
-        {configData && (
+        {/* Progress Info */}
+        {progress && status === ExtractionStatus.RUNNING && (
           <>
             <Divider />
-            <div>
-              <Text strong>Current Configuration:</Text>
-              <div style={{ marginTop: 8 }}>
-                <Row gutter={[16, 8]}>
-                  <Col span={12}>
-                    <Text type="secondary">Max Depth: {configData.max_depth}</Text>
-                  </Col>
-                  <Col span={12}>
-                    <Text type="secondary">Batch Size: {configData.batch_size}</Text>
-                  </Col>
-                  <Col span={12}>
-                    <Text type="secondary">Workers: {configData.max_workers}</Text>
-                  </Col>
-                  <Col span={12}>
-                    <Text type="secondary">
-                      Dedup: {configData.enable_deduplication ? 'Enabled' : 'Disabled'}
-                    </Text>
-                  </Col>
-                </Row>
-              </div>
-            </div>
+            <Row gutter={16}>
+              <Col span={8}>
+                <Statistic
+                  title="Progress"
+                  value={progress.progress_percentage || 0}
+                  precision={1}
+                  suffix="%"
+                />
+              </Col>
+              <Col span={8}>
+                <Statistic
+                  title="Processed"
+                  value={progress.processed_count || 0}
+                  // suffix={`/ ${progress.total || 0}`}
+                />
+              </Col>
+              {/* <Col span={8}>
+                <Statistic
+                  title="Discovery Rate"
+                  value={progress.entities_discovered || 0}
+                  suffix="discovered"
+                />
+              </Col> */}
+            </Row>
           </>
         )}
       </Card>
@@ -312,7 +400,15 @@ export const ExtractionControls: React.FC = () => {
         <Form
           form={form}
           layout="vertical"
-          initialValues={configData}
+          initialValues={configData || {
+            max_depth: 3,
+            batch_size: 10,
+            max_workers: 5,
+            pause_between_requests: 1.0,
+            enable_deduplication: true,
+            retry_attempts: 3,
+            auto_add_to_review: true
+          }}
         >
           <Row gutter={16}>
             <Col span={12}>
@@ -359,35 +455,27 @@ export const ExtractionControls: React.FC = () => {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
-                label="Auto Save Interval"
-                name="auto_save_interval"
-                rules={[{ required: true, type: 'number', min: 1, max: 100 }]}
+                label="Retry Attempts"
+                name="retry_attempts"
+                rules={[{ required: true, type: 'number', min: 0, max: 10 }]}
               >
-                <InputNumber min={1} max={100} style={{ width: '100%' }} />
+                <InputNumber min={0} max={10} style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item
-                label="Retry Attempts"
-                name="retry_attempts"
-                rules={[{ required: true, type: 'number', min: 1, max: 10 }]}
+                label="Enable Smart Deduplication"
+                name="enable_deduplication"
+                valuePropName="checked"
               >
-                <InputNumber min={1} max={10} style={{ width: '100%' }} />
+                <Switch />
               </Form.Item>
             </Col>
           </Row>
 
           <Form.Item
-            label="Retry Delay (seconds)"
-            name="retry_delay"
-            rules={[{ required: true, type: 'number', min: 0.5, max: 30 }]}
-          >
-            <InputNumber min={0.5} max={30} step={0.5} style={{ width: '100%' }} />
-          </Form.Item>
-
-          <Form.Item
-            label="Enable Smart Deduplication"
-            name="enable_deduplication"
+            label="Auto-add to Review Queue"
+            name="auto_add_to_review"
             valuePropName="checked"
           >
             <Switch />
@@ -397,10 +485,10 @@ export const ExtractionControls: React.FC = () => {
             message="Configuration Tips"
             description={
               <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
-                <li>Higher batch size = faster processing but more memory usage</li>
-                <li>More workers = parallel processing but higher API load</li>
+                <li>Higher batch size = faster processing, but more memory usage</li>
+                <li>More workers = parallel processing, but higher server load</li>
                 <li>Smart deduplication prevents processing already-known entities</li>
-                <li>Increase retry delay if you encounter rate limiting</li>
+                <li>Increase pause between requests if you encounter rate limiting</li>
               </ul>
             }
             type="info"
@@ -428,31 +516,78 @@ export const ExtractionControls: React.FC = () => {
             />
           </Form.Item>
 
-          <Form.Item label="Select Entities to Extract" required>
+          <Form.Item label="Select Queues to Process" required>
             <Select
               mode="multiple"
-              placeholder="Select entities from active queue"
-              value={selectedEntities}
-              onChange={setSelectedEntities}
+              placeholder="Select queues to process"
+              value={selectedQueues}
+              onChange={setSelectedQueues}
               style={{ width: '100%' }}
-              showSearch
-              filterOption={(input, option) =>
-                option?.children?.toString().toLowerCase().includes(input.toLowerCase()) || false
-              }
             >
-              {activeQueueData?.entries.map((entry) => (
-                <Option key={entry.qid} value={entry.qid}>
-                  {entry.entity.title} ({entry.qid})
-                </Option>
-              ))}
+              {QUEUE_OPTIONS.map((queue) => {
+                const stats = getQueueStats(queue.key)
+                return (
+                  <Option key={queue.key} value={queue.key} disabled={stats.count === 0}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Space>
+                        {queue.icon}
+                        <Tag color={queue.color}>{queue.label}</Tag>
+                      </Space>
+                      <Badge 
+                        count={stats.count} 
+                        style={{ backgroundColor: stats.count > 0 ? '#52c41a' : '#d9d9d9' }}
+                      />
+                    </div>
+                    <div style={{ marginLeft: 20, marginTop: 4 }}>
+                      <Text type="secondary" style={{ fontSize: '12px' }}>
+                        {queue.description}
+                      </Text>
+                    </div>
+                  </Option>
+                )
+              })}
             </Select>
           </Form.Item>
 
           <Alert
-            message={`${selectedEntities.length} entities selected for extraction`}
-            type={selectedEntities.length > 0 ? 'success' : 'warning'}
+            message={`${getTotalEntitiesForQueues()} entities selected for extraction from ${selectedQueues.length} queue(s)`}
+            type={getTotalEntitiesForQueues() > 0 ? 'success' : 'warning'}
             showIcon
+            style={{ marginBottom: 16 }}
           />
+
+          {selectedQueues.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <Title level={5}>Selected Queues:</Title>
+              <Space wrap>
+                {selectedQueues.map((queueType) => {
+                  const queue = QUEUE_OPTIONS.find(q => q.key === queueType)
+                  const stats = getQueueStats(queueType)
+                  return (
+                    <Tooltip key={queueType} title={queue?.description}>
+                      <Tag color={queue?.color} icon={queue?.icon}>
+                        {queue?.label}: {stats.count} entities
+                      </Tag>
+                    </Tooltip>
+                  )
+                })}
+              </Space>
+            </div>
+          )}
+
+          {getTotalEntitiesForQueues() === 0 && (
+            <Alert
+              message="No entities available"
+              description="Please add entities to the selected queues before starting extraction."
+              type="warning"
+              showIcon
+              action={
+                <Button size="small" type="link">
+                  Add Entities
+                </Button>
+              }
+            />
+          )}
         </Form>
       </Modal>
     </>

@@ -72,6 +72,79 @@ class ConnectionManager:
 
     def get_connection_count(self) -> int:
         return len(self.active_connections)
+    
+# Add these methods INSIDE your ConnectionManager class
+
+    async def notify_extraction_status_change(self, status_data: Dict[str, Any]):
+        """Notify clients about extraction status changes"""
+        message = {
+            "type": "extraction_status_change",
+            "data": {
+                "status": status_data.get("status", ""),
+                "session_id": status_data.get("session_id"),
+                "session_name": status_data.get("session_name"),
+                "message": status_data.get("message", ""),
+                "config": status_data.get("config", {}),
+                "total_extracted": status_data.get("total_extracted", 0),
+                "total_errors": status_data.get("total_errors", 0),
+                "total_skipped": status_data.get("total_skipped", 0),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        }
+        
+        # Filter to clients subscribed to extraction updates
+        def should_send(conn_info):
+            subs = conn_info.get("subscriptions", [])
+            return "extraction" in subs or "all" in subs
+        
+        await self.broadcast_to_filtered(message, should_send)
+
+    async def notify_extraction_progress(self, progress_data: Dict[str, Any]):
+        """Notify clients about extraction progress"""
+        message = {
+            "type": "extraction_progress",
+            "data": {
+                "session_id": progress_data.get("session_id"),
+                "current_entity_qid": progress_data.get("current_entity_qid"),
+                "current_entity_title": progress_data.get("current_entity_title"),
+                "progress_percentage": progress_data.get("progress_percentage", 0),
+                "processed_count": progress_data.get("processed_count", 0),
+                "total_count": progress_data.get("total_count", 0),
+                "discovered_links": progress_data.get("discovered_links", 0),
+                "skipped_duplicates": progress_data.get("skipped_duplicates", 0),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        }
+        
+        # Filter to clients subscribed to extraction updates
+        def should_send(conn_info):
+            subs = conn_info.get("subscriptions", [])
+            return "extraction" in subs or "progress" in subs or "all" in subs
+        
+        await self.broadcast_to_filtered(message, should_send)
+
+    async def notify_links_discovered(self, discovery_data: Dict[str, Any]):
+        """Notify clients about newly discovered links"""
+        message = {
+            "type": "links_discovered",
+            "data": {
+                "session_id": discovery_data.get("session_id"),
+                "parent_qid": discovery_data.get("parent_qid"),
+                "parent_title": discovery_data.get("parent_title"),
+                "discovered_count": discovery_data.get("discovered_count", 0),
+                "added_to_review": discovery_data.get("added_to_review", 0),
+                "skipped_duplicates": discovery_data.get("skipped_duplicates", 0),
+                "skipped_reasons": discovery_data.get("skipped_reasons", {}),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        }
+        
+        # Filter to clients subscribed to discovery updates
+        def should_send(conn_info):
+            subs = conn_info.get("subscriptions", [])
+            return "discovery" in subs or "extraction" in subs or "all" in subs
+        
+        await self.broadcast_to_filtered(message, should_send)
 
 # Global connection manager instance
 manager = ConnectionManager()

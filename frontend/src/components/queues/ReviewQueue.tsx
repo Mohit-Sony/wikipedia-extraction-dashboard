@@ -1,13 +1,13 @@
 // src/components/queues/ReviewQueue.tsx
 import React, { useState } from 'react'
-import { 
-  Card, 
-  Table, 
-  Button, 
-  Space, 
-  Tag, 
-  Typography, 
-  Row, 
+import {
+  Card,
+  Table,
+  Button,
+  Space,
+  Tag,
+  Typography,
+  Row,
   Col,
   Select,
   Input,
@@ -59,10 +59,10 @@ export const ReviewQueue: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20 })
 
-  const { 
-    data: reviewData, 
+  const {
+    data: reviewData,
     isLoading,
-    refetch 
+    refetch
   } = useGetQueueEntitiesQuery({
     queue_type: QueueType.REVIEW,
     limit: pagination.pageSize,
@@ -95,7 +95,7 @@ export const ReviewQueue: React.FC = () => {
           if (result.error_count > 0) {
             message.warning(`${result.error_count} entities failed to approve`)
           }
-          
+
           setSelectedRowKeys([])
           refetch()
         } catch (error) {
@@ -207,7 +207,7 @@ export const ReviewQueue: React.FC = () => {
   }
 
   const filteredData = reviewData?.entries.filter(entry =>
-    !searchTerm || 
+    !searchTerm ||
     entry.entity.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     entry.entity.qid.toLowerCase().includes(searchTerm.toLowerCase())
   ) || []
@@ -220,8 +220,8 @@ export const ReviewQueue: React.FC = () => {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {getTypeIcon(record.entity.type)}
-            <Button 
-              type="link" 
+            <Button
+              type="link"
               onClick={() => {
                 setPreviewEntityQid(record.qid)
                 setPreviewDrawerOpen(true)
@@ -309,8 +309,8 @@ export const ReviewQueue: React.FC = () => {
       render: (_: any, record: QueueEntry) => (
         <Space size="small">
           <Tooltip title="Preview">
-            <Button 
-              size="small" 
+            <Button
+              size="small"
               icon={<EyeOutlined />}
               onClick={() => {
                 setPreviewEntityQid(record.qid)
@@ -319,16 +319,16 @@ export const ReviewQueue: React.FC = () => {
             />
           </Tooltip>
           <Tooltip title="Approve">
-            <Button 
-              size="small" 
+            <Button
+              size="small"
               type="primary"
               icon={<CheckOutlined />}
               onClick={() => handleSingleApprove(record.qid)}
             />
           </Tooltip>
           <Tooltip title="Reject">
-            <Button 
-              size="small" 
+            <Button
+              size="small"
               danger
               icon={<CloseOutlined />}
               onClick={() => handleSingleReject(record.qid)}
@@ -346,7 +346,7 @@ export const ReviewQueue: React.FC = () => {
 
   return (
     <>
-      <Card 
+      <Card
         title={
           <Space>
             <FilterOutlined />
@@ -355,8 +355,8 @@ export const ReviewQueue: React.FC = () => {
           </Space>
         }
         extra={
-          <Button 
-            icon={<ReloadOutlined />} 
+          <Button
+            icon={<ReloadOutlined />}
             onClick={() => refetch()}
             loading={isLoading}
           >
@@ -473,9 +473,9 @@ export const ReviewQueue: React.FC = () => {
             total: reviewData?.total || 0,
             showSizeChanger: true,
             showQuickJumper: true,
-            showTotal: (total, range) => 
+            showTotal: (total, range) =>
               `${range[0]}-${range[1]} of ${total} entities`,
-            onChange: (page, pageSize) => 
+            onChange: (page, pageSize) =>
               setPagination({ current: page, pageSize: pageSize || 20 })
           }}
           scroll={{ x: 1000 }}
@@ -489,7 +489,7 @@ export const ReviewQueue: React.FC = () => {
             <Space wrap>
               {sourcesData.sources.map(source => (
                 <Tag
-                  key={source.source}
+                  key={source.source || 'unknown'}
                   icon={getDiscoverySourceIcon(source.source)}
                   color={discoverySourceFilter === source.source ? 'blue' : 'default'}
                   style={{ cursor: 'pointer' }}
@@ -497,7 +497,7 @@ export const ReviewQueue: React.FC = () => {
                     discoverySourceFilter === source.source ? undefined : source.source
                   )}
                 >
-                  {source.source.replace('_', ' ')}: {source.count}
+                  {source.source?.replace('_', ' ') || 'Unknown'}: {source.count}
                 </Tag>
               ))}
             </Space>
@@ -507,7 +507,7 @@ export const ReviewQueue: React.FC = () => {
         {filteredData.length === 0 && !isLoading && (
           <div style={{ textAlign: 'center', padding: 40 }}>
             <Text type="secondary">
-              {searchTerm || discoverySourceFilter 
+              {searchTerm || discoverySourceFilter
                 ? 'No entities match your filters'
                 : 'No entities in review queue'
               }

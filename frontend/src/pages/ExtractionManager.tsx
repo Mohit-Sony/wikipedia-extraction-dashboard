@@ -132,7 +132,7 @@ export const ExtractionManager: React.FC = () => {
         size="large"
         type="card"
       >
-        <TabPane 
+        {/* <TabPane 
           tab={
             <Space>
               <MonitorOutlined />
@@ -149,7 +149,7 @@ export const ExtractionManager: React.FC = () => {
               <ExtractionControls />
             </Col>
           </Row>
-        </TabPane>
+        </TabPane> */}
 
         <TabPane 
           tab={
@@ -286,7 +286,7 @@ export const ExtractionManager: React.FC = () => {
           </Row>
         </TabPane>
 
-        <TabPane 
+        {/* <TabPane 
           tab={
             <Space>
               <BarChartOutlined />
@@ -384,7 +384,7 @@ export const ExtractionManager: React.FC = () => {
               </Card>
             </Col>
           </Row>
-        </TabPane>
+        </TabPane> */}
       </Tabs>
     </div>
   )

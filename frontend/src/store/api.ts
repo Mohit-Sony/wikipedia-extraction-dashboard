@@ -220,7 +220,7 @@ export const api = createApi({
       message: string; 
       session_id: number 
     }, {
-      entities: string[];
+      queue_types: string[];
       config?: Partial<ExtractionConfig>;
       session_name?: string;
     }>({

@@ -341,6 +341,9 @@ class ExtractionService:
             # Perform extraction
             extracted_data = await extract_wikipedia_page_optimized(entity.title)
             
+            # TODO remove print
+            print("--------------   Extraction Complete here are the extraction result ...>>>>>>>>>>.... : ",extracted_data)
+
             if not extracted_data:
                 self._log_extraction_event(db, "failed", entity.qid, {"error": "No data returned"})
                 entity.status = EntityStatus.FAILED.value
@@ -377,10 +380,16 @@ class ExtractionService:
             return True
             
         except Exception as e:
-            logger.error(f"Failed to extract entity {entity.qid}: {e}")
-            self._log_extraction_event(db, "failed", entity.qid, {"error": str(e)})
-            entity.status = EntityStatus.FAILED.value
-            self._move_entity_to_queue(db, entity, QueueType.FAILED)
+            try:
+                db.rollback()  # Rollback the failed transaction
+                logger.error(f"Failed to extract entity {entity.qid}: {e}")
+                self._log_extraction_event(db, "failed", entity.qid, {"error": str(e)})
+                entity.status = EntityStatus.FAILED.value
+                self._move_entity_to_queue(db, entity, QueueType.FAILED)
+                db.commit()  # Commit the status change
+            except Exception as rollback_error:
+                logger.error(f"Error during rollback for entity {entity.qid}: {rollback_error}")
+                db.rollback()  # Final attempt to clean state
             return False
     
     async def _process_discovered_links(self, db: Session, parent_entity: Entity, extracted_data: Dict):
@@ -393,6 +402,7 @@ class ExtractionService:
         dedup_service = SmartDeduplicationService(db)
         added_to_review = 0
         skip_reasons = {}
+        processing_errors = 0
         
         for link in internal_links:
             qid = link.get('qid')
@@ -401,93 +411,139 @@ class ExtractionService:
             if not qid or not title:
                 continue
             
-            # Check deduplication
-            check_result = dedup_service.check_entity_status(qid, title)
-            
-            if check_result['should_add']:
-                # Create new entity and add to review queue
-                new_entity = Entity(
-                    qid=qid,
-                    title=title,
-                    type=link.get('type', 'unknown'),
-                    short_desc=link.get('shortDesc'),
-                    status=EntityStatus.UNPROCESSED.value,
-                    parent_qid=parent_entity.qid,
-                    depth=parent_entity.depth + 1,
-                    discovered_by=parent_entity.qid,
-                    file_path=f"placeholder/{qid}.json"  # Will be updated when extracted
-                )
+            try:
+                # Check deduplication
+                check_result = dedup_service.check_entity_status(qid, title)
                 
-                db.add(new_entity)
-                db.flush()  # Get ID
+                if check_result['should_add']:
+                    # Ensure type and description are never None
+                    entity_type = link.get('type') or 'unknown'
+                    entity_short_desc = link.get('shortDesc') or f"Entity discovered from {parent_entity.title}"
+                    
+                    # Create new entity and add to review queue
+                    new_entity = Entity(
+                        qid=qid,
+                        title=title,
+                        type=entity_type,
+                        short_desc=entity_short_desc,
+                        status=EntityStatus.UNPROCESSED.value,
+                        parent_qid=parent_entity.qid,
+                        depth=parent_entity.depth + 1,
+                        discovered_by=parent_entity.qid,
+                        file_path=f"placeholder/{qid}.json"
+                    )
+                    
+                    db.add(new_entity)
+                    db.flush()  # Get ID
+                    
+                    # Add to review queue
+                    queue_entry = QueueEntry(
+                        qid=qid,
+                        queue_type=QueueType.REVIEW.value,
+                        priority=2,  # Medium priority
+                        added_by="extraction_service",
+                        discovery_source=parent_entity.qid,
+                        notes=f"Discovered from {parent_entity.title}"
+                    )
+                    
+                    db.add(queue_entry)
+                    added_to_review += 1
+                    
+                    # Log decision
+                    decision = UserDecision(
+                        qid=qid,
+                        session_id=self.current_session.id,
+                        decision_type="discovered_link",
+                        decision_value="added_to_review",
+                        auto_decision=True,
+                        reasoning=f"New entity discovered from {parent_entity.title}"
+                    )
+                    db.add(decision)
+                    
+                else:
+                    # Log skipped entity
+                    reason = check_result['reason']
+                    skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
+                    
+                    decision = UserDecision(
+                        qid=qid,
+                        session_id=self.current_session.id,
+                        decision_type="skip_duplicate",
+                        decision_value=reason,
+                        auto_decision=True,
+                        reasoning=f"Skipped: {reason}, existing status: {check_result['existing_status']}"
+                    )
+                    db.add(decision)
+                    
+            except Exception as e:
+                processing_errors += 1
+                logger.error(f"Error processing link {qid} ({title}): {e}")
                 
-                # Add to review queue
-                queue_entry = QueueEntry(
-                    qid=qid,
-                    queue_type=QueueType.REVIEW.value,
-                    priority=2,  # Medium priority
-                    added_by="extraction_service",
-                    discovery_source=parent_entity.qid,
-                    notes=f"Discovered from {parent_entity.title}"
-                )
+                # Handle database rollback
+                try:
+                    db.rollback()
+                    logger.info(f"Session rolled back for failed link: {qid}")
+                except Exception as rollback_error:
+                    logger.error(f"Error during rollback while processing link {qid}: {rollback_error}")
+                    # Force clean state
+                    try:
+                        db.close()
+                        # Note: You might need to recreate the session here depending on your setup
+                    except:
+                        pass
                 
-                db.add(queue_entry)
-                added_to_review += 1
-                
-                # Log decision
-                decision = UserDecision(
-                    qid=qid,
-                    session_id=self.current_session.id,
-                    decision_type="discovered_link",
-                    decision_value="added_to_review",
-                    auto_decision=True,
-                    reasoning=f"New entity discovered from {parent_entity.title}"
-                )
-                db.add(decision)
-                
-            else:
-                # Log skipped entity
-                reason = check_result['reason']
-                skip_reasons[reason] = skip_reasons.get(reason, 0) + 1
-                
-                decision = UserDecision(
-                    qid=qid,
-                    session_id=self.current_session.id,
-                    decision_type="skip_duplicate",
-                    decision_value=reason,
-                    auto_decision=True,
-                    reasoning=f"Skipped: {reason}, existing status: {check_result['existing_status']}"
-                )
-                db.add(decision)
+                # Continue processing remaining links
+                continue
         
-        # Update session stats
-        self.current_session.total_skipped += dedup_service.stats.total_skipped
-        db.commit()
+        # Commit all successful operations
+        try:
+            # Update session stats
+            self.current_session.total_skipped += dedup_service.stats.total_skipped
+            db.commit()
+            
+            logger.info(f"Successfully processed {len(internal_links)} links from {parent_entity.title}: "
+                    f"{added_to_review} added to review, {dedup_service.stats.total_skipped} skipped, "
+                    f"{processing_errors} errors")
+            
+        except Exception as commit_error:
+            logger.error(f"Error committing processed links for {parent_entity.title}: {commit_error}")
+            try:
+                db.rollback()
+            except:
+                pass
+            return  # Exit early if we can't commit
         
         # Log discovered links event
-        self._log_extraction_event(db, "discovered_links", parent_entity.qid, {
-            "total_links": len(internal_links),
-            "added_to_review": added_to_review,
-            "skipped_duplicates": dedup_service.stats.total_skipped,
-            "skip_reasons": skip_reasons,
-            "deduplication_stats": dedup_service.stats.dict()
-        })
-        
-        # Notify WebSocket clients
-        if self.websocket_manager:
-            await self.websocket_manager.notify_links_discovered({
-                "session_id": self.current_session.id,
-                "parent_qid": parent_entity.qid,
-                "parent_title": parent_entity.title,
-                "discovered_count": len(internal_links),
+        try:
+            self._log_extraction_event(db, "discovered_links", parent_entity.qid, {
+                "total_links": len(internal_links),
                 "added_to_review": added_to_review,
                 "skipped_duplicates": dedup_service.stats.total_skipped,
-                "skipped_reasons": skip_reasons
+                "processing_errors": processing_errors,
+                "skip_reasons": skip_reasons,
+                "deduplication_stats": dedup_service.stats.dict()
             })
+        except Exception as log_error:
+            logger.error(f"Error logging extraction event: {log_error}")
+            # Continue even if logging fails
         
-        logger.info(f"Processed {len(internal_links)} links from {parent_entity.title}: "
-                   f"{added_to_review} added to review, {dedup_service.stats.total_skipped} skipped")
-    
+        # Notify WebSocket clients
+        try:
+            if self.websocket_manager:
+                await self.websocket_manager.notify_links_discovered({
+                    "session_id": self.current_session.id,
+                    "parent_qid": parent_entity.qid,
+                    "parent_title": parent_entity.title,
+                    "discovered_count": len(internal_links),
+                    "added_to_review": added_to_review,
+                    "skipped_duplicates": dedup_service.stats.total_skipped,
+                    "processing_errors": processing_errors,
+                    "skipped_reasons": skip_reasons
+                })
+        except Exception as websocket_error:
+            logger.error(f"Error notifying WebSocket clients: {websocket_error}")
+            # Continue even if WebSocket notification fails  
+        
     def _get_entities_for_extraction(self, db: Session, queue_types: List[QueueType]) -> List[Entity]:
         """Get entities ready for extraction"""
         queue_type_values = [qt.value for qt in queue_types]
