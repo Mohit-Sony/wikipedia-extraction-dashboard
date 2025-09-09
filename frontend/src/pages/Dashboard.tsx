@@ -1,6 +1,6 @@
 // src/pages/Dashboard.tsx
 import React from 'react'
-import { Row, Col, Card, Statistic,  Typography, Spin, Alert, Button, Space } from 'antd'
+import { Row, Col, Card, Statistic, Typography, Spin, Alert, Button, Space } from 'antd'
 import {
   DatabaseOutlined,
   CheckCircleOutlined,
@@ -15,17 +15,23 @@ import { QueueOverview } from '../components/dashboard/QueueOverview'
 import { TypeDistribution } from '../components/dashboard/TypeDistribution'
 import { ExtractionTrends } from '../components/dashboard/ExtractionTrends'
 import { QuickActions } from '../components/dashboard/QuickActions'
+// Add import:
+import { useGetExtractionStatusQuery } from '../store/api'
+
 
 const { Title, Paragraph } = Typography
 
 export const Dashboard: React.FC = () => {
-  const { 
-    data: dashboardStats, 
-    isLoading, 
-    error, 
-    refetch 
+  const {
+    data: dashboardStats,
+    isLoading,
+    error,
+    refetch
   } = useGetDashboardStatsQuery()
-  
+
+  // Add query:
+  const { data: extractionStatus } = useGetExtractionStatusQuery()
+
   const [triggerSync, { isLoading: syncLoading }] = useTriggerSyncMutation()
 
   const handleRefresh = () => {
@@ -79,15 +85,15 @@ export const Dashboard: React.FC = () => {
           </Col>
           <Col>
             <Space>
-              <Button 
-                icon={<ReloadOutlined />} 
+              <Button
+                icon={<ReloadOutlined />}
                 onClick={handleRefresh}
                 type="default"
               >
                 Refresh
               </Button>
-              <Button 
-                icon={<SyncOutlined spin={syncLoading} />} 
+              <Button
+                icon={<SyncOutlined spin={syncLoading} />}
                 onClick={handleSync}
                 loading={syncLoading}
                 type="primary"
@@ -138,6 +144,18 @@ export const Dashboard: React.FC = () => {
               value={dashboardStats?.total_failed || 0}
               prefix={<ExclamationCircleOutlined />}
               valueStyle={{ color: '#ff4d4f' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Card>
+            <Statistic
+              title="Extraction Status"
+              value={extractionStatus?.status?.toUpperCase() || 'IDLE'}
+              valueStyle={{
+                color: extractionStatus?.status === 'running' ? '#52c41a' :
+                  extractionStatus?.status === 'error' ? '#ff4d4f' : '#1890ff'
+              }}
             />
           </Card>
         </Col>

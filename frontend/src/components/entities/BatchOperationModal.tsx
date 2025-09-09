@@ -60,6 +60,16 @@ export const BatchOperationModal: React.FC<BatchOperationModalProps> = ({
         showIcon
         style={{ marginBottom: 16 }}
       />
+      {/* // Add condition for review operations: */}
+
+      {(operation === 'approve_to_active' || operation === 'reject_to_rejected') && (
+        <Alert
+          message="Review Queue Operations"
+          description="These operations are for entities in the review queue"
+          type="info"
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       <Form form={form} layout="vertical">
         <Form.Item
@@ -69,6 +79,8 @@ export const BatchOperationModal: React.FC<BatchOperationModalProps> = ({
         >
           <Select onChange={setOperation}>
             <Option value="move">Move to Queue</Option>
+            <Option value="approve_to_active">Approve to Active Queue</Option>
+            <Option value="reject_to_rejected">Reject to Rejected Queue</Option>
             <Option value="update_priority">Update Priority</Option>
             <Option value="delete">Remove from Queue</Option>
           </Select>

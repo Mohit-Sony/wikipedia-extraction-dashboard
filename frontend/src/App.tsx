@@ -9,6 +9,7 @@ import { Dashboard } from './pages/Dashboard'
 import { EntityManager } from './pages/EntityManager'
 import { QueueManager } from './pages/QueueManager'
 import { Analytics } from './pages/Analytics'
+import { ExtractionManager } from './pages/ExtractionManager'
 import { SystemStatus } from './pages/SystemStatus'
 import { NotificationProvider } from './components/common/NotificationProvider'
 import { useWebSocket } from './hooks/useWebSocket'
@@ -59,6 +60,7 @@ const AppContent: React.FC = () => {
           <Route path="/queues" element={<QueueManager />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/system" element={<SystemStatus />} />
+          <Route path="/extractio" element={<ExtractionManager />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </MainLayout>

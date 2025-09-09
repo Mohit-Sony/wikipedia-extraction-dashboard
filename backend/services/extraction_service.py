@@ -13,7 +13,7 @@ import sys
 import os
 
 # Add Python_Helper to path for importing wiki_extract
-# sys.path.append(os.path.join(os.path.dirname(__file__), '../../../../'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '../../'))
 from Python_Helper.wiki_extract import extract_wikipedia_page_optimized
 
 logger = logging.getLogger(__name__)

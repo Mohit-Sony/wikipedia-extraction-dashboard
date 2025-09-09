@@ -13,6 +13,7 @@ import {
   DisconnectOutlined,
   BellOutlined,
 } from '@ant-design/icons'
+import { RocketOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useSelector, useDispatch } from 'react-redux'
 import { toggleSidebar, selectSidebarCollapsed } from '../../store/slices/uiSlice'
@@ -65,6 +66,12 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       key: '/system',
       icon: <SettingOutlined />,
       label: 'System Status',
+    },
+    // In menuItems array, add after '/queues':
+    {
+      key: '/extraction',
+      icon: <RocketOutlined />,
+      label: 'Extraction',
     },
   ]
 

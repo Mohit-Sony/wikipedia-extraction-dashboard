@@ -13,7 +13,19 @@ import type {
   SearchSuggestion,
   EntityFilter,
   QueueType,
-  Priority
+  Priority,
+  // NEW TYPES
+  ExtractionConfig,
+  ExtractionSession,
+  ExtractionProgress,
+  ExtractionLog,
+  ExtractionStatus,
+  DeduplicationStats,
+  DiscoverySource,
+  ManualEntityRequest,
+  ManualEntityResponse,
+  BulkReviewOperation,
+  BulkReviewResult
 } from '../types'
 
 export const api = createApi({
@@ -25,9 +37,9 @@ export const api = createApi({
       return headers
     },
   }),
-  tagTypes: ['Entity', 'Queue', 'Analytics', 'Dashboard'],
+  tagTypes: ['Entity', 'Queue', 'Analytics', 'Dashboard', 'Extraction', 'DeduplicationStats'],
   endpoints: (builder) => ({
-    // Entity endpoints
+    // ===== EXISTING ENTITY ENDPOINTS (unchanged) =====
     getEntities: builder.query<EntitiesResponse, EntityFilter>({
       query: (filters) => {
         const params = new URLSearchParams()
@@ -78,7 +90,17 @@ export const api = createApi({
       query: (query) => `entities/search/suggestions?query=${encodeURIComponent(query)}&limit=10`,
     }),
 
-    // Queue endpoints
+    // ===== NEW MANUAL ENTITY ENDPOINT =====
+    addManualEntity: builder.mutation<ManualEntityResponse, ManualEntityRequest>({
+      query: (entityData) => ({
+        url: 'entities/manual',
+        method: 'POST',
+        body: entityData,
+      }),
+      invalidatesTags: ['Entity', 'Queue', 'Dashboard', 'DeduplicationStats'],
+    }),
+
+    // ===== EXISTING QUEUE ENDPOINTS (updated) =====
     getAllQueues: builder.query<Record<string, any>, void>({
       query: () => 'queues',
       providesTags: ['Queue'],
@@ -90,9 +112,29 @@ export const api = createApi({
       offset?: number;
       sort_by?: string;
       sort_order?: string;
+      discovery_source?: string;  // NEW FILTER
     }>({
-      query: ({ queue_type, limit = 50, offset = 0, sort_by = 'added_date', sort_order = 'desc' }) =>
-        `queues/${queue_type}?limit=${limit}&offset=${offset}&sort_by=${sort_by}&sort_order=${sort_order}`,
+      query: ({ 
+        queue_type, 
+        limit = 50, 
+        offset = 0, 
+        sort_by = 'added_date', 
+        sort_order = 'desc',
+        discovery_source
+      }) => {
+        const params = new URLSearchParams({
+          limit: limit.toString(),
+          offset: offset.toString(),
+          sort_by,
+          sort_order
+        })
+        
+        if (discovery_source) {
+          params.append('discovery_source', discovery_source)
+        }
+        
+        return `queues/${queue_type}?${params.toString()}`
+      },
       providesTags: ['Queue'],
     }),
 
@@ -148,7 +190,145 @@ export const api = createApi({
       providesTags: ['Queue'],
     }),
 
-    // Analytics endpoints
+    // ===== NEW REVIEW QUEUE ENDPOINTS =====
+    getReviewQueueSources: builder.query<{ sources: DiscoverySource[] }, void>({
+      query: () => 'queues/review/sources',
+      providesTags: ['Queue'],
+    }),
+
+    bulkApproveReview: builder.mutation<BulkReviewResult, BulkReviewOperation>({
+      query: (operation) => ({
+        url: 'queues/review/bulk-approve',
+        method: 'POST',
+        body: operation,
+      }),
+      invalidatesTags: ['Queue', 'Entity', 'Dashboard', 'DeduplicationStats'],
+    }),
+
+    bulkRejectReview: builder.mutation<BulkReviewResult, BulkReviewOperation>({
+      query: (operation) => ({
+        url: 'queues/review/bulk-reject',
+        method: 'POST',
+        body: operation,
+      }),
+      invalidatesTags: ['Queue', 'Entity', 'Dashboard', 'DeduplicationStats'],
+    }),
+
+    // ===== NEW EXTRACTION ENDPOINTS =====
+    startExtraction: builder.mutation<{ 
+      success: boolean; 
+      message: string; 
+      session_id: number 
+    }, {
+      entities: string[];
+      config?: Partial<ExtractionConfig>;
+      session_name?: string;
+    }>({
+      query: (data) => ({
+        url: 'extraction/start',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Extraction', 'Queue', 'Dashboard'],
+    }),
+
+    pauseExtraction: builder.mutation<{ 
+      success: boolean; 
+      message: string 
+    }, void>({
+      query: () => ({
+        url: 'extraction/pause',
+        method: 'POST',
+      }),
+      invalidatesTags: ['Extraction'],
+    }),
+
+    resumeExtraction: builder.mutation<{ 
+      success: boolean; 
+      message: string 
+    }, void>({
+      query: () => ({
+        url: 'extraction/resume',
+        method: 'POST',
+      }),
+      invalidatesTags: ['Extraction'],
+    }),
+
+    cancelExtraction: builder.mutation<{ 
+      success: boolean; 
+      message: string 
+    }, void>({
+      query: () => ({
+        url: 'extraction/cancel',
+        method: 'POST',
+      }),
+      invalidatesTags: ['Extraction', 'Queue', 'Dashboard'],
+    }),
+
+    getExtractionStatus: builder.query<{
+      status: ExtractionStatus;
+      current_session?: ExtractionSession;
+      progress?: ExtractionProgress;
+    }, void>({
+      query: () => 'extraction/status',
+      providesTags: ['Extraction'],
+    }),
+
+    configureExtraction: builder.mutation<{ 
+      success: boolean; 
+      message: string 
+    }, ExtractionConfig>({
+      query: (config) => ({
+        url: 'extraction/configure',
+        method: 'POST',
+        body: config,
+      }),
+    }),
+
+    getExtractionConfig: builder.query<ExtractionConfig, void>({
+      query: () => 'extraction/config',
+    }),
+
+    getExtractionSessions: builder.query<{ 
+      sessions: ExtractionSession[] 
+    }, {
+      limit?: number;
+      offset?: number;
+    }>({
+      query: ({ limit = 20, offset = 0 } = {}) => 
+        `extraction/sessions?limit=${limit}&offset=${offset}`,
+      providesTags: ['Extraction'],
+    }),
+
+    getSessionLogs: builder.query<{ 
+      logs: ExtractionLog[] 
+    }, {
+      session_id: number;
+      limit?: number;
+      offset?: number;
+    }>({
+      query: ({ session_id, limit = 50, offset = 0 }) => 
+        `extraction/sessions/${session_id}/logs?limit=${limit}&offset=${offset}`,
+      providesTags: ['Extraction'],
+    }),
+
+    getExtractionQueueStats: builder.query<{
+      total_in_queue: number;
+      by_queue_type: Record<string, number>;
+      by_priority: Record<string, number>;
+      estimated_processing_time?: number;
+    }, void>({
+      query: () => 'extraction/queue-stats',
+      providesTags: ['Queue', 'Extraction'],
+    }),
+
+    // ===== NEW DEDUPLICATION ENDPOINTS =====
+    getDeduplicationStats: builder.query<DeduplicationStats, void>({
+      query: () => 'deduplication/stats',
+      providesTags: ['DeduplicationStats'],
+    }),
+
+    // ===== EXISTING ANALYTICS ENDPOINTS (unchanged) =====
     getDashboardStats: builder.query<DashboardStats, void>({
       query: () => 'analytics/dashboard',
       providesTags: ['Dashboard'],
@@ -202,7 +382,7 @@ export const api = createApi({
       providesTags: ['Analytics'],
     }),
 
-    // System endpoints
+    // ===== EXISTING SYSTEM ENDPOINTS (unchanged) =====
     getSystemStats: builder.query<any, void>({
       query: () => 'system/stats',
     }),
@@ -220,7 +400,6 @@ export const api = createApi({
       query: () => 'validate',
     }),
 
-    // Health check
     healthCheck: builder.query<any, void>({
       query: () => '/health',
     }),
@@ -228,7 +407,7 @@ export const api = createApi({
 })
 
 export const {
-  // Entity hooks
+  // ===== EXISTING ENTITY HOOKS (unchanged) =====
   useGetEntitiesQuery,
   useGetEntityQuery,
   useUpdateEntityMutation,
@@ -236,7 +415,10 @@ export const {
   useGetEntityRelationshipsQuery,
   useGetSearchSuggestionsQuery,
 
-  // Queue hooks
+  // ===== NEW MANUAL ENTITY HOOK =====
+  useAddManualEntityMutation,
+
+  // ===== EXISTING QUEUE HOOKS (unchanged) =====
   useGetAllQueuesQuery,
   useGetQueueEntitiesQuery,
   useAddToQueueMutation,
@@ -245,7 +427,27 @@ export const {
   useBatchQueueOperationMutation,
   useGetQueueStatsQuery,
 
-  // Analytics hooks
+  // ===== NEW REVIEW QUEUE HOOKS =====
+  useGetReviewQueueSourcesQuery,
+  useBulkApproveReviewMutation,
+  useBulkRejectReviewMutation,
+
+  // ===== NEW EXTRACTION HOOKS =====
+  useStartExtractionMutation,
+  usePauseExtractionMutation,
+  useResumeExtractionMutation,
+  useCancelExtractionMutation,
+  useGetExtractionStatusQuery,
+  useConfigureExtractionMutation,
+  useGetExtractionConfigQuery,
+  useGetExtractionSessionsQuery,
+  useGetSessionLogsQuery,
+  useGetExtractionQueueStatsQuery,
+
+  // ===== NEW DEDUPLICATION HOOKS =====
+  useGetDeduplicationStatsQuery,
+
+  // ===== EXISTING ANALYTICS HOOKS (unchanged) =====
   useGetDashboardStatsQuery,
   useGetExtractionTrendsQuery,
   useGetTypeAnalysisQuery,
@@ -256,7 +458,7 @@ export const {
   useGetExtractionPerformanceQuery,
   useGetTopEntitiesQuery,
 
-  // System hooks
+  // ===== EXISTING SYSTEM HOOKS (unchanged) =====
   useGetSystemStatsQuery,
   useTriggerSyncMutation,
   useValidateSystemQuery,

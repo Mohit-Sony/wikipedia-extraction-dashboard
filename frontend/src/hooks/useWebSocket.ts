@@ -21,11 +21,13 @@ import {
   addInfoNotification,
   addWarningNotification
 } from '../store/slices/notificationSlice'
-import type { WebSocketMessage } from '../types'
-
-// const WEBSOCKET_URL = process.env.DEV 
-//   ? 'ws://localhost:8000/api/v1/ws'
-//   : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/api/v1/ws`
+import type { 
+  WebSocketMessage,
+  ExtractionProgressEvent,
+  LinksDiscoveredEvent,
+  ExtractionStatusChangeEvent,
+  DeduplicationStatsEvent
+} from '../types'
 
 const WEBSOCKET_URL = "ws://localhost:8000/api/v1/ws"
 const RECONNECT_INTERVAL = 5000 // 5 seconds
@@ -35,10 +37,8 @@ const PING_INTERVAL = 30000 // 30 seconds
 export const useWebSocket = () => {
   const dispatch = useDispatch()
   const wsRef = useRef<WebSocket | null>(null)
-//   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-//   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null)
-    const reconnectTimeoutRef = useRef<number | null>(null)
-    const pingIntervalRef = useRef<number | null>(null)
+  const reconnectTimeoutRef = useRef<number | null>(null)
+  const pingIntervalRef = useRef<number | null>(null)
   
   const connected = useSelector(selectWebSocketConnected)
   const connecting = useSelector(selectWebSocketConnecting)
@@ -62,9 +62,9 @@ export const useWebSocket = () => {
             duration: 3000
           }))
           break
-          
+
+        // ===== EXISTING HANDLERS (unchanged) =====
         case 'entity_processed':
-          // Invalidate relevant queries to trigger refetch
           dispatch(api.util.invalidateTags(['Entity', 'Queue', 'Dashboard']))
           
           dispatch(addInfoNotification({
@@ -75,7 +75,6 @@ export const useWebSocket = () => {
           break
           
         case 'queue_updated':
-          // Invalidate queue-related queries
           dispatch(api.util.invalidateTags(['Queue', 'Dashboard']))
           
           if (message.data.change_type === 'added') {
@@ -85,16 +84,6 @@ export const useWebSocket = () => {
               duration: 3000
             }))
           }
-          break
-          
-        case 'extraction_progress':
-          // Update progress in UI if needed
-          const { current, total, percentage, current_entity } = message.data
-          dispatch(addInfoNotification({
-            title: 'Extraction Progress',
-            message: `Processing ${current_entity} (${current}/${total} - ${percentage}%)`,
-            duration: 2000
-          }))
           break
           
         case 'batch_operation_complete':
@@ -130,16 +119,34 @@ export const useWebSocket = () => {
             dispatch(addErrorNotification({
               title: 'Sync Failed',
               message: statusMessage,
-              duration: 0 // Don't auto-dismiss errors
+              duration: 0
             }))
           }
           break
-          
+
+        // ===== NEW EXTRACTION EVENT HANDLERS =====
+        case 'extraction_progress':
+          handleExtractionProgress(message as ExtractionProgressEvent)
+          break
+
+        case 'links_discovered':
+          handleLinksDiscovered(message as LinksDiscoveredEvent)
+          break
+
+        case 'extraction_status_change':
+          handleExtractionStatusChange(message as ExtractionStatusChangeEvent)
+          break
+
+        case 'deduplication_stats':
+          handleDeduplicationStats(message as DeduplicationStatsEvent)
+          break
+
+        // ===== EXISTING HANDLERS (unchanged) =====
         case 'error_occurred':
           dispatch(addErrorNotification({
             title: 'System Error',
             message: message.data.error_message,
-            duration: 0 // Don't auto-dismiss errors
+            duration: 0
           }))
           break
           
@@ -159,6 +166,156 @@ export const useWebSocket = () => {
     }
   }, [dispatch])
 
+  // ===== NEW EVENT HANDLERS =====
+  const handleExtractionProgress = useCallback((event: ExtractionProgressEvent) => {
+    const { data } = event
+    
+    // Invalidate extraction-related queries to trigger refetch
+    dispatch(api.util.invalidateTags(['Extraction', 'Queue']))
+    
+    // Show progress notification (less frequent to avoid spam)
+    if (data.entities_processed % 10 === 0 || data.status !== 'running') {
+      const progressPercent = data.queue_size > 0 
+        ? Math.round((data.entities_processed / (data.entities_processed + data.queue_size)) * 100)
+        : 100
+
+      dispatch(addInfoNotification({
+        title: 'Extraction Progress',
+        message: `Processing ${data.current_entity} - ${data.entities_processed} processed (${progressPercent}%)`,
+        duration: 3000
+      }))
+    }
+
+    // Show completion notification
+    if (data.status === 'completed') {
+      dispatch(addSuccessNotification({
+        title: 'Extraction Completed',
+        message: `Successfully processed ${data.entities_processed} entities`,
+        duration: 6000
+      }))
+    }
+
+    // Show error notification
+    if (data.status === 'error') {
+      dispatch(addErrorNotification({
+        title: 'Extraction Error',
+        message: `Extraction stopped due to error at entity: ${data.current_entity}`,
+        duration: 0
+      }))
+    }
+  }, [dispatch])
+
+  const handleLinksDiscovered = useCallback((event: LinksDiscoveredEvent) => {
+    const { data } = event
+    
+    // Invalidate relevant queries
+    dispatch(api.util.invalidateTags(['Queue', 'DeduplicationStats']))
+    
+    // Show discovery notification
+    if (data.new_entities > 0) {
+      dispatch(addInfoNotification({
+        title: 'New Links Discovered',
+        message: `Found ${data.new_entities} new entities from ${data.parent_title} (${data.duplicates} duplicates filtered)`,
+        duration: 4000
+      }))
+    }
+
+    // Show high duplicate rate warning
+    if (data.links_found > 0 && data.duplicates / data.links_found > 0.8) {
+      dispatch(addWarningNotification({
+        title: 'High Duplicate Rate',
+        message: `${Math.round((data.duplicates / data.links_found) * 100)}% of links from ${data.parent_title} were duplicates`,
+        duration: 5000
+      }))
+    }
+  }, [dispatch])
+
+  const handleExtractionStatusChange = useCallback((event: ExtractionStatusChangeEvent) => {
+    const { data } = event
+    
+    // Invalidate extraction queries
+    dispatch(api.util.invalidateTags(['Extraction']))
+    
+    // Show status change notifications
+    switch (data.new_status) {
+      case 'running':
+        dispatch(addSuccessNotification({
+          title: 'Extraction Started',
+          message: data.message,
+          duration: 4000
+        }))
+        break
+        
+      case 'paused':
+        dispatch(addWarningNotification({
+          title: 'Extraction Paused',
+          message: data.message,
+          duration: 4000
+        }))
+        break
+        
+      case 'cancelled':
+        dispatch(addWarningNotification({
+          title: 'Extraction Cancelled',
+          message: data.message,
+          duration: 5000
+        }))
+        break
+        
+      case 'completed':
+        dispatch(addSuccessNotification({
+          title: 'Extraction Completed',
+          message: data.message,
+          duration: 6000
+        }))
+        break
+        
+      case 'error':
+        dispatch(addErrorNotification({
+          title: 'Extraction Failed',
+          message: data.message,
+          duration: 0
+        }))
+        break
+        
+      default:
+        dispatch(addInfoNotification({
+          title: 'Extraction Status Changed',
+          message: `Status changed to ${data.new_status}`,
+          duration: 3000
+        }))
+    }
+  }, [dispatch])
+
+  const handleDeduplicationStats = useCallback((event: DeduplicationStatsEvent) => {
+    const { data } = event
+    
+    // Invalidate deduplication stats
+    dispatch(api.util.invalidateTags(['DeduplicationStats']))
+    
+    // Show efficiency notification for high deduplication rates
+    if (data.deduplication_rate > 0.9) {
+      dispatch(addInfoNotification({
+        title: 'High Deduplication Efficiency',
+        message: `${Math.round(data.deduplication_rate * 100)}% of discovered entities were duplicates`,
+        duration: 4000
+      }))
+    }
+    
+    // Show discovery source stats
+    const topSource = Object.entries(data.discovery_sources)
+      .sort(([,a], [,b]) => b - a)[0]
+    
+    if (topSource && topSource[1] > 50) {
+      dispatch(addInfoNotification({
+        title: 'Discovery Source Update',
+        message: `${topSource[0]} has discovered ${topSource[1]} entities`,
+        duration: 3000
+      }))
+    }
+  }, [dispatch])
+
+  // ===== CONNECTION MANAGEMENT (unchanged) =====
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN || connecting) {
       return
@@ -172,10 +329,23 @@ export const useWebSocket = () => {
       wsRef.current.onopen = () => {
         console.log('WebSocket connected')
         
-        // Subscribe to all updates by default
+        // Subscribe to all updates including new extraction events
         const subscribeMessage = {
           type: 'subscribe',
-          data: { topics: ['entities', 'queues', 'progress', 'batch_operations', 'errors', 'all'] }
+          data: { 
+            topics: [
+              'entities', 
+              'queues', 
+              'progress', 
+              'batch_operations', 
+              'errors', 
+              'extraction_progress',      // NEW
+              'links_discovered',        // NEW
+              'extraction_status',       // NEW
+              'deduplication_stats',     // NEW
+              'all'
+            ] 
+          }
         }
         
         wsRef.current?.send(JSON.stringify(subscribeMessage))

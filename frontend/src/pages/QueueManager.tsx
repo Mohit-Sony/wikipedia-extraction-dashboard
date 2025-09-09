@@ -1,10 +1,10 @@
 // src/pages/QueueManager.tsx
 import React, { useState } from 'react'
 import { Row, Col, Card, List, Button, Tag, Typography, Space, Dropdown, Menu, Modal, message } from 'antd'
-import { 
-  UnorderedListOutlined, 
-  MoreOutlined, 
-  EyeOutlined, 
+import {
+  UnorderedListOutlined,
+  MoreOutlined,
+  EyeOutlined,
   DeleteOutlined,
   ArrowRightOutlined,
   PlusOutlined,
@@ -12,14 +12,16 @@ import {
   GlobalOutlined,
   TeamOutlined
 } from '@ant-design/icons'
-import { 
-  useGetAllQueuesQuery, 
-  useGetQueueEntitiesQuery, 
+import {
+  useGetAllQueuesQuery,
+  useGetQueueEntitiesQuery,
   useRemoveFromQueueMutation,
-  useAddToQueueMutation 
+  useAddToQueueMutation
 } from '../store/api'
 import { QueueType, QueueEntry, Priority } from '../types'
 import { EntityPreviewDrawer } from '../components/entities/EntityPreviewDrawer'
+import { ReviewQueue } from '../components/queues/ReviewQueue'
+
 
 const { Title, Text } = Typography
 const { confirm } = Modal
@@ -37,12 +39,14 @@ export const QueueManager: React.FC = () => {
   const [removeFromQueue] = useRemoveFromQueueMutation()
   const [addToQueue] = useAddToQueueMutation()
 
+  // Update queueTypes array to include review queue:
   const queueTypes = [
     { key: QueueType.ACTIVE, label: 'Active Queue', color: '#1890ff', description: 'Ready for processing' },
-    { key: QueueType.ON_HOLD, label: 'On Hold', color: '#722ed1', description: 'Temporarily paused' },
-    { key: QueueType.REJECTED, label: 'Rejected', color: '#faad14', description: 'Not suitable for processing' },
+    { key: QueueType.REVIEW, label: 'Review Queue', color: '#722ed1', description: 'Awaiting human review' }, // NEW
     { key: QueueType.COMPLETED, label: 'Completed', color: '#52c41a', description: 'Successfully processed' },
     { key: QueueType.FAILED, label: 'Failed', color: '#ff4d4f', description: 'Processing failed' },
+    { key: QueueType.REJECTED, label: 'Rejected', color: '#faad14', description: 'Not suitable for processing' },
+    { key: QueueType.ON_HOLD, label: 'On Hold', color: '#f0f0f0', description: 'Temporarily paused' },
   ]
 
   const handlePreview = (qid: string) => {
@@ -89,8 +93,8 @@ export const QueueManager: React.FC = () => {
 
   const getEntityActions = (entry: QueueEntry) => (
     <Menu>
-      <Menu.Item 
-        key="preview" 
+      <Menu.Item
+        key="preview"
         icon={<EyeOutlined />}
         onClick={() => handlePreview(entry.qid)}
       >
@@ -100,7 +104,7 @@ export const QueueManager: React.FC = () => {
         {queueTypes
           .filter(q => q.key !== selectedQueue)
           .map(queue => (
-            <Menu.Item 
+            <Menu.Item
               key={queue.key}
               onClick={() => handleMoveToQueue(entry.qid, queue.key)}
             >
@@ -110,8 +114,8 @@ export const QueueManager: React.FC = () => {
         }
       </Menu.SubMenu>
       <Menu.Divider />
-      <Menu.Item 
-        key="remove" 
+      <Menu.Item
+        key="remove"
         icon={<DeleteOutlined />}
         danger
         onClick={() => {
@@ -145,25 +149,25 @@ export const QueueManager: React.FC = () => {
         onClick={() => setSelectedQueue(queueType.key)}
       >
         <div style={{ textAlign: 'center' }}>
-          <div style={{ 
-            fontSize: 32, 
-            fontWeight: 'bold', 
+          <div style={{
+            fontSize: 32,
+            fontWeight: 'bold',
             color: queueType.color,
-            marginBottom: 8 
+            marginBottom: 8
           }}>
             {count}
           </div>
-          <div style={{ 
-            fontSize: 16, 
+          <div style={{
+            fontSize: 16,
             fontWeight: 500,
-            marginBottom: 4 
+            marginBottom: 4
           }}>
             {queueType.label}
           </div>
-          <div style={{ 
-            fontSize: 12, 
+          <div style={{
+            fontSize: 12,
             color: '#666',
-            lineHeight: 1.3 
+            lineHeight: 1.3
           }}>
             {queueType.description}
           </div>
@@ -210,8 +214,8 @@ export const QueueManager: React.FC = () => {
           </Text>
         </Col>
         <Col>
-          <Button 
-            type="primary" 
+          <Button
+            type="primary"
             icon={<PlusOutlined />}
             onClick={() => message.info('Batch operations available in Entity Manager')}
           >
@@ -225,8 +229,10 @@ export const QueueManager: React.FC = () => {
         {queueTypes.map(renderQueueCard)}
       </Row>
 
+
+
       {/* Selected Queue Content */}
-      <Card 
+      <Card
         title={
           <Space>
             <UnorderedListOutlined style={{ color: queueTypes.find(q => q.key === selectedQueue)?.color }} />
@@ -238,107 +244,116 @@ export const QueueManager: React.FC = () => {
         }
         loading={queueLoading}
       >
-        {queueData?.entries?.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '60px 0', color: '#999' }}>
-            <UnorderedListOutlined style={{ fontSize: 48, marginBottom: 16 }} />
-            <div style={{ fontSize: 16 }}>No entities in this queue</div>
-            <div style={{ fontSize: 14, marginTop: 8 }}>
-              Entities will appear here when added to the {selectedQueue} queue
+{/* // Add conditional rendering for review queue: */}
+        {selectedQueue === QueueType.REVIEW ? (
+          <ReviewQueue />
+        ) : (<>
+          {queueData?.entries?.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '60px 0', color: '#999' }}>
+              <UnorderedListOutlined style={{ fontSize: 48, marginBottom: 16 }} />
+              <div style={{ fontSize: 16 }}>No entities in this queue</div>
+              <div style={{ fontSize: 14, marginTop: 8 }}>
+                Entities will appear here when added to the {selectedQueue} queue
+              </div>
             </div>
-          </div>
-        ) : (
-          <List
-            dataSource={queueData?.entries || []}
-            renderItem={(entry: QueueEntry) => (
-              <List.Item
-                style={{ 
-                  padding: '16px 0',
-                  borderBottom: '1px solid #f0f0f0' 
-                }}
-                actions={[
-                  <Dropdown 
-                    key="actions"
-                    overlay={getEntityActions(entry)} 
-                    trigger={['click']}
-                    placement="bottomRight"
-                  >
-                    <Button type="text" icon={<MoreOutlined />} />
-                  </Dropdown>
-                ]}
-              >
-                <List.Item.Meta
-                  avatar={
-                    <div style={{ 
-                      width: 40, 
-                      height: 40, 
-                      borderRadius: '50%', 
-                      backgroundColor: '#f0f2f5',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#1890ff',
-                      fontSize: 16
-                    }}>
-                      {getTypeIcon(entry.entity.type)}
-                    </div>
-                  }
-                  title={
-                    <Space size="large">
-                      <Button 
-                        type="link" 
-                        onClick={() => handlePreview(entry.qid)}
-                        style={{ padding: 0, height: 'auto', fontSize: 16, fontWeight: 500 }}
-                      >
-                        {entry.entity.title}
-                      </Button>
-                      <Text code style={{ fontSize: 12 }}>{entry.qid}</Text>
-                    </Space>
-                  }
-                  description={
-                    <div style={{ marginTop: 8 }}>
-                      <Space wrap>
-                        <Tag color="blue">{entry.entity.type}</Tag>
-                        <Tag color={getPriorityColor(entry.priority)}>
-                          {getPriorityText(entry.priority)} Priority
-                        </Tag>
-                        <Text type="secondary">{entry.entity.num_links} links</Text>
-                        <Text type="secondary">
-                          {(entry.entity.page_length / 1000).toFixed(1)}K chars
-                        </Text>
-                        <Text type="secondary">
-                          Added {new Date(entry.added_date).toLocaleDateString()}
-                        </Text>
+          ) : (
+            <List
+              dataSource={queueData?.entries || []}
+              renderItem={(entry: QueueEntry) => (
+                <List.Item
+                  style={{
+                    padding: '16px 0',
+                    borderBottom: '1px solid #f0f0f0'
+                  }}
+                  actions={[
+                    <Dropdown
+                      key="actions"
+                      overlay={getEntityActions(entry)}
+                      trigger={['click']}
+                      placement="bottomRight"
+                    >
+                      <Button type="text" icon={<MoreOutlined />} />
+                    </Dropdown>
+                  ]}
+                >
+                  <List.Item.Meta
+                    avatar={
+                      <div style={{
+                        width: 40,
+                        height: 40,
+                        borderRadius: '50%',
+                        backgroundColor: '#f0f2f5',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#1890ff',
+                        fontSize: 16
+                      }}>
+                        {getTypeIcon(entry.entity.type)}
+                      </div>
+                    }
+                    title={
+                      <Space size="large">
+                        <Button
+                          type="link"
+                          onClick={() => handlePreview(entry.qid)}
+                          style={{ padding: 0, height: 'auto', fontSize: 16, fontWeight: 500 }}
+                        >
+                          {entry.entity.title}
+                        </Button>
+                        <Text code style={{ fontSize: 12 }}>{entry.qid}</Text>
                       </Space>
-                      {entry.notes && (
-                        <div style={{ marginTop: 8 }}>
-                          <Text type="secondary" style={{ fontStyle: 'italic' }}>
-                            Note: {entry.notes}
+                    }
+                    description={
+                      <div style={{ marginTop: 8 }}>
+                        <Space wrap>
+                          <Tag color="blue">{entry.entity.type}</Tag>
+                          <Tag color={getPriorityColor(entry.priority)}>
+                            {getPriorityText(entry.priority)} Priority
+                          </Tag>
+                          <Text type="secondary">{entry.entity.num_links} links</Text>
+                          <Text type="secondary">
+                            {(entry.entity.page_length / 1000).toFixed(1)}K chars
                           </Text>
-                        </div>
-                      )}
-                      {entry.entity.short_desc && (
-                        <div style={{ marginTop: 8, maxWidth: 600 }}>
-                          <Text type="secondary" ellipsis>
-                            {entry.entity.short_desc}
+                          <Text type="secondary">
+                            Added {new Date(entry.added_date).toLocaleDateString()}
                           </Text>
-                        </div>
-                      )}
-                    </div>
-                  }
-                />
-              </List.Item>
-            )}
-            pagination={{
-              total: queueData?.total || 0,
-              pageSize: 50,
-              showSizeChanger: false,
-              showQuickJumper: true,
-              showTotal: (total, range) => 
-                `${range[0]}-${range[1]} of ${total} entities`,
-            }}
-          />
-        )}
+                        </Space>
+                        {entry.notes && (
+                          <div style={{ marginTop: 8 }}>
+                            <Text type="secondary" style={{ fontStyle: 'italic' }}>
+                              Note: {entry.notes}
+                            </Text>
+                          </div>
+                        )}
+                        {entry.entity.short_desc && (
+                          <div style={{ marginTop: 8, maxWidth: 600 }}>
+                            <Text type="secondary" ellipsis>
+                              {entry.entity.short_desc}
+                            </Text>
+                          </div>
+                        )}
+                      </div>
+                    }
+                  />
+                </List.Item>
+              )}
+              pagination={{
+                total: queueData?.total || 0,
+                pageSize: 50,
+                showSizeChanger: false,
+                showQuickJumper: true,
+                showTotal: (total, range) =>
+                  `${range[0]}-${range[1]} of ${total} entities`,
+              }}
+            />
+          )}
+        </>)}
+
+
       </Card>
+
+
 
       <EntityPreviewDrawer
         qid={previewEntityQid}

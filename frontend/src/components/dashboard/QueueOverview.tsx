@@ -1,11 +1,11 @@
 
 // src/components/dashboard/QueueOverview.tsx
 import React from 'react'
-import { Card, Row, Col, Progress, Typography,  } from 'antd'
+import { Card, Row, Col, Progress, Typography, } from 'antd'
 import { UnorderedListOutlined } from '@ant-design/icons'
 import { QueueStats } from '../../types'
 
-const { Title , Text } = Typography
+const { Title, Text } = Typography
 
 interface QueueOverviewProps {
   queueStats: QueueStats[]
@@ -24,6 +24,10 @@ export const QueueOverview: React.FC<QueueOverviewProps> = ({ queueStats }) => {
         return '#faad14'
       case 'on_hold':
         return '#722ed1'
+      case 'review':
+        return '#722ed1'
+      case 'processing':
+        return '#722ed1'
       default:
         return '#d9d9d9'
     }
@@ -32,7 +36,7 @@ export const QueueOverview: React.FC<QueueOverviewProps> = ({ queueStats }) => {
   const totalEntities = queueStats.reduce((sum, stat) => sum + stat.count, 0)
 
   return (
-    <Card 
+    <Card
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <UnorderedListOutlined />
@@ -53,8 +57,8 @@ export const QueueOverview: React.FC<QueueOverviewProps> = ({ queueStats }) => {
                   </Text>
                   <Text>{stat.count}</Text>
                 </div>
-                <Progress 
-                  percent={percentage} 
+                <Progress
+                  percent={percentage}
                   strokeColor={getQueueColor(stat.queue_type)}
                   size="small"
                   showInfo={false}

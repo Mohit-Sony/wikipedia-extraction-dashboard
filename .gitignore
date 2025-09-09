@@ -12,3 +12,9 @@ logs
 pipeline_state
 pipeline_state.pkl
 pipeline_states
+.env
+venv
+fresh_venv
+__pycache__
+__pycache__/*
+.pyc

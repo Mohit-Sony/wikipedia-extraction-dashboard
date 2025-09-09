@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, extract, and_
 from database.database import get_db
 from database.models import Entity, QueueEntry, UserDecision, ExtractionSession
-from utils.schemas import DashboardStats, QueueStats, TypeStats
+from utils.schemas import DashboardStats, QueueStats, TypeStats , EntityResponse
 from services.file_service import FileService
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
@@ -28,6 +28,12 @@ async def get_dashboard_stats(db: Session = Depends(get_db)):
     total_failed = db.query(func.count(Entity.id)).filter(
         Entity.status == "failed"
     ).scalar()
+    # Before the return statement, add:
+    total_in_review = db.query(func.count(Entity.id)).filter(
+        Entity.status == "in_review"  # or whatever status represents "in review"
+    ).scalar()
+
+
     
     # Queue statistics
     queue_stats_raw = db.query(
@@ -75,6 +81,7 @@ async def get_dashboard_stats(db: Session = Depends(get_db)):
         total_processed=total_processed,
         total_pending=total_pending,
         total_failed=total_failed,
+        total_in_review=total_in_review,  # <-- ADD THIS LINE
         queue_stats=queue_stats,
         type_stats=type_stats,
         recent_activity=[EntityResponse.from_orm(e) for e in recent_entities]
