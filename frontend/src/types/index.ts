@@ -22,33 +22,94 @@ export interface Entity {
   updated_at: string;
 }
 
+// src/types/entityPreview.ts
 export interface EntityPreview {
-  qid: string;
-  title: string;
-  type: string;
+  qid: string
+  title: string
+  type: string
+
   content: {
-    extract: string;
-    description: string;
-    summary: string;
-  };
-  infobox: Record<string, any>;
-  links: {
-    internal_count: number;
-    external_count: number;
-    sample_internal: Array<{
-      qid: string;
-      title: string;
-      type: string;
-      shortDesc?: string;
-    }>;
-  };
+    description: string
+    extract: string
+    wikitext_preview?: string
+  }
+
+  content_chunks: {
+    section: string
+    paragraph: number
+    text_preview: string
+    has_references: boolean
+  }[]
+
+  images: {
+    index: number
+    url: string
+    alt: string
+    caption?: string
+    filename?: string
+  }[]
+
+  tables: {
+    index: number
+    caption: string
+    headers: string[]
+    sample_rows: string[][]
+    total_rows: number
+    total_columns: number
+  }[]
+
   metadata: {
-    page_length: number;
-    last_modified?: string;
-    num_tables: number;
-    num_images: number;
-    num_chunks: number;
-  };
+    page_length: number
+    page_id: string
+    revision_id: string
+    last_modified?: string
+    num_tables: number
+    num_images: number
+    num_chunks: number
+    num_references: number
+    num_categories: number
+  }
+
+  links: {
+    internal_count: number
+    external_count: number
+    internal_links: {
+      qid: string
+      title: string
+      type: string
+      shortDesc?: string
+    }[]
+    external_links: {
+      title: string
+      url: string
+    }[]
+    top_link_types: {
+      type: string
+      count: number
+    }[]
+  }
+
+  infobox: Record<string, string | number | boolean>
+
+  categories: string[]
+
+  extraction_info: {
+    timestamp: string
+    extraction_time: number
+    depth: number
+    parent_qid?: string
+    extractor_version: string
+  }
+
+  relationships: {
+    children_count: number
+    same_depth_count: number
+    queue_status: {
+      queue_type: string
+      priority?: number
+      notes?: string
+    }
+  }
 }
 
 // ===== UPDATED ENUMS =====

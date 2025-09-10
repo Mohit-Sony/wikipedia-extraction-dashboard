@@ -138,20 +138,189 @@ async def update_entity(qid: str, entity_update: EntityUpdate, db: Session = Dep
     db.refresh(entity)
     return EntityResponse.from_orm(entity)
 
-@router.get("/entities/{qid}/preview", response_model=EntityPreview)
+# backend/api/entities.py - ENHANCED PREVIEW ENDPOINT
+
+
+@router.get("/entities/{qid}/preview")
 async def get_entity_preview(qid: str, db: Session = Depends(get_db)):
-    """Get entity preview with content from JSON file"""
+    """Get enhanced entity preview with comprehensive data matching frontend EntityPreview interface"""
     # Get entity from database
     entity = db.query(Entity).filter(Entity.qid == qid).first()
     if not entity:
         raise HTTPException(status_code=404, detail="Entity not found")
     
-    # Get preview data from file
-    preview_data = file_service.get_entity_preview(qid, entity.type)
-    if not preview_data:
+    # Get full entity data from file
+    entity_data = file_service.read_entity_data(qid, entity.type)
+    if not entity_data:
         raise HTTPException(status_code=404, detail="Entity file not found")
     
-    return EntityPreview(**preview_data)
+    # Extract data from JSON structure
+    content = entity_data.get('content', {})
+    links = entity_data.get('links', {})
+    internal_links = links.get('internal_links', [])
+    external_links = links.get('external_links', [])
+    tables = entity_data.get('tables', [])
+    images = entity_data.get('images', [])
+    metadata = entity_data.get('metadata', {})
+    extraction_metadata = entity_data.get('extraction_metadata', {})
+    chunks = entity_data.get('chunks', [])
+    categories = entity_data.get('categories', [])
+    infobox = entity_data.get('infobox', {})
+    
+    # Get entity relationships from database
+    children_count = db.query(Entity).filter(Entity.parent_qid == qid).count()
+    same_depth_count = db.query(Entity).filter(
+        Entity.depth == entity.depth,
+        Entity.qid != qid
+    ).count() if entity.depth > 0 else 0
+    
+    # Get queue status
+    queue_entry = db.query(QueueEntry).filter(QueueEntry.qid == qid).first()
+    queue_status = {
+        "queue_type": queue_entry.queue_type if queue_entry else "none",
+        "priority": queue_entry.priority if queue_entry else None,
+        "notes": queue_entry.notes if queue_entry else None
+    }
+    
+    # Build response matching exact frontend interface structure
+    preview_response = {
+        "qid": qid,
+        "title": entity_data.get('title', ''),
+        "type": entity.type,
+        
+        # Content structure - exactly matching frontend interface
+        "content": {
+            "description": content.get('description', ''),
+            "extract": content.get('extract', ''),
+            "wikitext_preview": content.get('wikitext', '')[:1000] if content.get('wikitext') else None
+        },
+        
+        # Content chunks - matching frontend structure
+        "content_chunks": [
+            {
+                "section": chunk.get('section', ''),
+                "paragraph": chunk.get('paragraph', 0),
+                "text_preview": chunk.get('chunk_text', '')[:200],
+                "has_references": len(chunk.get('references', [])) > 0
+            }
+            for chunk in chunks[:15]  # First 15 chunks
+        ],
+        
+        # Images - matching frontend structure
+        "images": [
+            {
+                "index": i,
+                "url": image.get('url', ''),
+                "alt": image.get('alt', ''),
+                "caption": image.get('caption', '') if image.get('caption') else None,
+                "filename": image.get('filename', '') if image.get('filename') else None
+            }
+            for i, image in enumerate(images[:10])  # First 10 images
+        ],
+        
+        # Tables - matching frontend structure
+        "tables": [
+            {
+                "index": i,
+                "caption": table.get('caption', f'Table {i+1}'),
+                "headers": table.get('headers', [])[:10],  # First 10 headers
+                "sample_rows": table.get('rows', [])[:5],  # First 5 rows
+                "total_rows": len(table.get('rows', [])),
+                "total_columns": len(table.get('headers', []))
+            }
+            for i, table in enumerate(tables[:8])  # First 8 tables
+        ],
+        
+        # Metadata - matching frontend structure
+        "metadata": {
+            "page_length": metadata.get('page_length', 0),
+            "page_id": str(metadata.get('page_id', '')),
+            "revision_id": str(metadata.get('revId', '')),
+            "last_modified": metadata.get('last_modified'),
+            "num_tables": len(tables),
+            "num_images": len(images),
+            "num_chunks": len(chunks),
+            "num_references": len(entity_data.get('references', [])),
+            "num_categories": len(categories)
+        },
+        
+        # Links - matching frontend structure
+        "links": {
+            "internal_count": len(internal_links),
+            "external_count": len(external_links),
+            "internal_links": [
+                {
+                    "qid": link.get('qid', ''),
+                    "title": link.get('title', ''),
+                    "type": link.get('type', 'unknown'),
+                    "shortDesc": link.get('shortDesc') if link.get('shortDesc') else None
+                }
+                for link in internal_links[:20]  # First 20 internal links
+            ],
+            "external_links": [
+                {
+                    "title": link.get('title', ''),
+                    "url": link.get('url', '')
+                }
+                for link in external_links[:10]  # First 10 external links
+            ],
+            "top_link_types": _get_link_type_distribution(internal_links)
+        },
+        
+        # Infobox - ensuring all values are string/number/boolean
+        "infobox": {
+            key: _convert_infobox_value(value) 
+            for key, value in infobox.items()
+        },
+        
+        # Categories - simple array of strings
+        "categories": categories[:25],  # First 25 categories
+        
+        # Extraction info - matching frontend structure
+        "extraction_info": {
+            "timestamp": extraction_metadata.get('timestamp', ''),
+            "extraction_time": float(extraction_metadata.get('extraction_time', 0)),
+            "depth": int(extraction_metadata.get('depth', 0)),
+            "parent_qid": extraction_metadata.get('parent_qid') if extraction_metadata.get('parent_qid') else None,
+            "extractor_version": extraction_metadata.get('extractor_version', '')
+        },
+        
+        # Relationships - matching frontend structure
+        "relationships": {
+            "children_count": children_count,
+            "same_depth_count": same_depth_count,
+            "queue_status": queue_status
+        }
+    }
+    
+    return preview_response
+
+
+
+def _get_link_type_distribution(internal_links: List[Dict]) -> List[Dict]:
+    """Analyze distribution of link types"""
+    type_counts = {}
+    for link in internal_links:
+        link_type = link.get('type', 'unknown')
+        type_counts[link_type] = type_counts.get(link_type, 0) + 1
+    
+    # Return top 5 types
+    sorted_types = sorted(type_counts.items(), key=lambda x: x[1], reverse=True)
+    return [{'type': t, 'count': c} for t, c in sorted_types[:5]]
+
+
+def _get_entity_queue_status(qid: str, db: Session) -> Dict:
+    """Get current queue status for entity"""
+    queue_entry = db.query(QueueEntry).filter(QueueEntry.qid == qid).first()
+    if not queue_entry:
+        return {'queue_type': None, 'priority': None, 'added_date': None}
+    
+    return {
+        'queue_type': queue_entry.queue_type,
+        'priority': queue_entry.priority,
+        'added_date': queue_entry.added_date.isoformat() if queue_entry.added_date else None,
+        'notes': queue_entry.notes
+    }
 
 @router.get("/entities/{qid}/relationships")
 async def get_entity_relationships(qid: str, db: Session = Depends(get_db)):
