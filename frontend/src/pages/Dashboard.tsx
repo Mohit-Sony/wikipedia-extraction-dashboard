@@ -169,7 +169,7 @@ export const Dashboard: React.FC = () => {
         </Col>
 
         {/* Type Distribution */}
-        <Col xs={24} lg={12}>
+        <Col xs={40} >
           <TypeDistribution typeStats={dashboardStats?.type_stats || []} />
         </Col>
 

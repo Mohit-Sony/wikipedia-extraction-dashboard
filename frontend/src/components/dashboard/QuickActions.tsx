@@ -43,7 +43,6 @@ export const QuickActions: React.FC = () => {
           <Title level={4} style={{ margin: 0 }}>Quick Actions</Title>
         </div>
       }
-      style={{ height: 400 }}
     >
       <Space direction="vertical" style={{ width: '100%' }} size="large">
         <div>

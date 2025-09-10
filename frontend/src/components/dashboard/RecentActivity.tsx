@@ -55,7 +55,6 @@ export const RecentActivity: React.FC<RecentActivityProps> = ({ recentActivity }
           <Title level={4} style={{ margin: 0 }}>Recent Activity</Title>
         </Space>
       }
-      style={{ height: 400 }}
       bodyStyle={{ padding: 0 }}
     >
       <List

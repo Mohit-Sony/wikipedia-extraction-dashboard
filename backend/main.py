@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime  # Add this import
 
 # Database setup
 from database.database import init_database, get_db
@@ -35,6 +36,9 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting Wikipedia Dashboard API...")
+
+    app.state.startup_time = datetime.utcnow()
+
     
     # Initialize database
     init_database()
@@ -158,6 +162,56 @@ async def health_check(db: Session = Depends(get_db)):
         return {
             "status": "unhealthy",
             "error": str(e)
+        }
+
+# Add this endpoint to backend/main.py
+@app.get("/api/v1/health")
+async def get_system_stats(db: Session = Depends(get_db)):
+    """Get comprehensive system statistics"""
+    try:
+        # Database stats
+        total_entities = db.query(Entity).count()
+        queue_counts = {}
+        for queue_type in ["active", "rejected", "on_hold", "completed", "failed", "review", "processing"]:
+            count = db.query(QueueEntry).filter(QueueEntry.queue_type == queue_type).count()
+            queue_counts[queue_type] = count
+        
+        # WebSocket stats
+        websocket_connections = websocket.manager.get_connection_count()
+        
+        # File system stats
+        file_stats = app.state.file_service.get_directory_stats()
+        
+        # Extraction service stats
+        extraction_status = extraction_service.get_extraction_status(db)
+        
+        return {
+            "database": {
+                "total_entities": total_entities,
+                "queue_counts": queue_counts,
+                "connection_status": "connected"
+            },
+            "websocket": {
+                "active_connections": websocket_connections,
+                "status": "operational"
+            },
+            "file_system": {
+                "total_files": file_stats.get("total_entities", 0),
+                "total_size_mb": round(file_stats.get("total_size_mb", 0), 2),
+                "status": "accessible"
+            },
+            "extraction_service": {
+                "status": extraction_status.get("status", "idle"),
+                "current_session": extraction_status.get("session_id"),
+                "is_running": extraction_service.is_running
+            },
+            "system_health": "operational"
+        }
+    except Exception as e:
+        logger.error(f"System stats failed: {e}")
+        return {
+            "error": str(e),
+            "status": "error"
         }
 
 # Manual sync endpoint

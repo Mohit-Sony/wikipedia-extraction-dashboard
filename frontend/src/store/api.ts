@@ -44,7 +44,7 @@ export const api = createApi({
     getEntities: builder.query<EntitiesResponse, EntityFilter>({
       query: (filters) => {
         const params = new URLSearchParams()
-        
+
         Object.entries(filters).forEach(([key, value]) => {
           if (value !== undefined && value !== null && value !== '') {
             if (Array.isArray(value)) {
@@ -54,7 +54,7 @@ export const api = createApi({
             }
           }
         })
-        
+
         return `entities?${params.toString()}`
       },
       providesTags: ['Entity'],
@@ -115,11 +115,11 @@ export const api = createApi({
       sort_order?: string;
       discovery_source?: string;  // NEW FILTER
     }>({
-      query: ({ 
-        queue_type, 
-        limit = 50, 
-        offset = 0, 
-        sort_by = 'added_date', 
+      query: ({
+        queue_type,
+        limit = 50,
+        offset = 0,
+        sort_by = 'added_date',
         sort_order = 'desc',
         discovery_source
       }) => {
@@ -129,11 +129,11 @@ export const api = createApi({
           sort_by,
           sort_order
         })
-        
+
         if (discovery_source) {
           params.append('discovery_source', discovery_source)
         }
-        
+
         return `queues/${queue_type}?${params.toString()}`
       },
       providesTags: ['Queue'],
@@ -216,10 +216,10 @@ export const api = createApi({
     }),
 
     // ===== NEW EXTRACTION ENDPOINTS =====
-    startExtraction: builder.mutation<{ 
-      success: boolean; 
-      message: string; 
-      session_id: number 
+    startExtraction: builder.mutation<{
+      success: boolean;
+      message: string;
+      session_id: number
     }, {
       queue_types: string[];
       config?: Partial<ExtractionConfig>;
@@ -233,9 +233,9 @@ export const api = createApi({
       invalidatesTags: ['Extraction', 'Queue', 'Dashboard'],
     }),
 
-    pauseExtraction: builder.mutation<{ 
-      success: boolean; 
-      message: string 
+    pauseExtraction: builder.mutation<{
+      success: boolean;
+      message: string
     }, void>({
       query: () => ({
         url: 'extraction/pause',
@@ -244,9 +244,9 @@ export const api = createApi({
       invalidatesTags: ['Extraction'],
     }),
 
-    resumeExtraction: builder.mutation<{ 
-      success: boolean; 
-      message: string 
+    resumeExtraction: builder.mutation<{
+      success: boolean;
+      message: string
     }, void>({
       query: () => ({
         url: 'extraction/resume',
@@ -255,9 +255,9 @@ export const api = createApi({
       invalidatesTags: ['Extraction'],
     }),
 
-    cancelExtraction: builder.mutation<{ 
-      success: boolean; 
-      message: string 
+    cancelExtraction: builder.mutation<{
+      success: boolean;
+      message: string
     }, void>({
       query: () => ({
         url: 'extraction/cancel',
@@ -266,14 +266,14 @@ export const api = createApi({
       invalidatesTags: ['Extraction', 'Queue', 'Dashboard'],
     }),
 
-getExtractionStatus: builder.query<ExtractionSessionStatus, void>({
-  query: () => 'extraction/status',
-  providesTags: ['Extraction'],
-}),
+    getExtractionStatus: builder.query<ExtractionSessionStatus, void>({
+      query: () => 'extraction/status',
+      providesTags: ['Extraction'],
+    }),
 
-    configureExtraction: builder.mutation<{ 
-      success: boolean; 
-      message: string 
+    configureExtraction: builder.mutation<{
+      success: boolean;
+      message: string
     }, ExtractionConfig>({
       query: (config) => ({
         url: 'extraction/configure',
@@ -286,25 +286,25 @@ getExtractionStatus: builder.query<ExtractionSessionStatus, void>({
       query: () => 'extraction/config',
     }),
 
-    getExtractionSessions: builder.query<{ 
-      sessions: ExtractionSession[] 
+    getExtractionSessions: builder.query<{
+      sessions: ExtractionSession[]
     }, {
       limit?: number;
       offset?: number;
     }>({
-      query: ({ limit = 20, offset = 0 } = {}) => 
+      query: ({ limit = 20, offset = 0 } = {}) =>
         `extraction/sessions?limit=${limit}&offset=${offset}`,
       providesTags: ['Extraction'],
     }),
 
-    getSessionLogs: builder.query<{ 
-      logs: ExtractionLog[] 
+    getSessionLogs: builder.query<{
+      logs: ExtractionLog[]
     }, {
       session_id: number;
       limit?: number;
       offset?: number;
     }>({
-      query: ({ session_id, limit = 50, offset = 0 }) => 
+      query: ({ session_id, limit = 50, offset = 0 }) =>
         `extraction/sessions/${session_id}/logs?limit=${limit}&offset=${offset}`,
       providesTags: ['Extraction'],
     }),
@@ -383,6 +383,9 @@ getExtractionStatus: builder.query<ExtractionSessionStatus, void>({
     getSystemStats: builder.query<any, void>({
       query: () => 'system/stats',
     }),
+
+
+
 
     triggerSync: builder.mutation<any, { full_sync?: boolean }>({
       query: ({ full_sync = false }) => ({

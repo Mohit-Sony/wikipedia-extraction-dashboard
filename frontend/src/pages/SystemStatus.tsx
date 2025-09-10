@@ -1,4 +1,4 @@
-// src/pages/SystemStatus.tsx
+// src/pages/SystemStatus.tsx - CORRECTED VERSION
 import React from 'react'
 import { Row, Col, Card, Statistic, Alert, Button, Typography, Space, Tag, Progress, List, Descriptions } from 'antd'
 import { 
@@ -17,7 +17,6 @@ import {
 } from '@ant-design/icons'
 import { 
   useHealthCheckQuery, 
-  useGetSystemStatsQuery, 
   useValidateSystemQuery,
   useTriggerSyncMutation 
 } from '../store/api'
@@ -33,7 +32,6 @@ const { Title, Text } = Typography
 
 export const SystemStatus: React.FC = () => {
   const { data: health, isLoading: healthLoading, refetch: refetchHealth, error: healthError } = useHealthCheckQuery()
-  const { data: systemStats, isLoading: statsLoading, refetch: refetchStats } = useGetSystemStatsQuery()
   const { data: validation, isLoading: validationLoading, refetch: refetchValidation } = useValidateSystemQuery()
   const [triggerSync, { isLoading: syncLoading }] = useTriggerSyncMutation()
   
@@ -43,19 +41,23 @@ export const SystemStatus: React.FC = () => {
 
   const handleRefreshAll = () => {
     refetchHealth()
-    refetchStats()
     refetchValidation()
   }
 
   const handleSync = async (fullSync = false) => {
     try {
       await triggerSync({ full_sync: fullSync }).unwrap()
+      // Refresh data after sync
+      setTimeout(() => {
+        refetchHealth()
+        refetchValidation()
+      }, 1000)
     } catch (error) {
       console.error('Sync failed:', error)
     }
   }
 
-  const getStatusIcon = (status: boolean) => {
+  const getStatusIcon = (status: boolean | undefined) => {
     return status ? (
       <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 20 }} />
     ) : (
@@ -63,7 +65,15 @@ export const SystemStatus: React.FC = () => {
     )
   }
 
-  const getStatusTag = (status: string, loading = false) => {
+  const getStatusTag = (status: string | boolean | undefined, loading = false) => {
+    if (loading) {
+      return <Tag color="processing">Checking...</Tag>
+    }
+    
+    if (typeof status === 'boolean') {
+      return <Tag color={status ? 'success' : 'error'}>{status ? 'Connected' : 'Disconnected'}</Tag>
+    }
+    
     const colors = {
       healthy: 'success',
       operational: 'success',
@@ -77,11 +87,8 @@ export const SystemStatus: React.FC = () => {
       inaccessible: 'error'
     }
     
-    if (loading) {
-      return <Tag color="processing">Checking...</Tag>
-    }
-    
-    return <Tag color={colors[status as keyof typeof colors] || 'default'}>{status}</Tag>
+    const statusStr = String(status || 'unknown').toLowerCase()
+    return <Tag color={colors[statusStr as keyof typeof colors] || 'default'}>{statusStr}</Tag>
   }
 
   const getWebSocketStatus = () => {
@@ -92,36 +99,112 @@ export const SystemStatus: React.FC = () => {
 
   const wsStatus = getWebSocketStatus()
 
+  // IMPROVED: Better error handling and status determination
+  const getComponentStatus = (component: string) => {
+    // If health check failed completely
+    if (healthError) {
+      return {
+        status: false,
+        description: 'Connection Failed',
+        details: `Cannot connect to API server: ${healthError}`
+      }
+    }
+
+    // If health data is loading
+    if (healthLoading) {
+      return {
+        status: undefined,
+        description: 'Checking...',
+        details: 'Performing health check...'
+      }
+    }
+
+    // If no health data available
+    if (!health) {
+      return {
+        status: false,
+        description: 'Unknown',
+        details: 'Health data unavailable'
+      }
+    }
+
+    // Component-specific status
+    switch (component) {
+      case 'api':
+        return {
+          status: health.system_health === 'operational',
+          description: health.system_health || 'Unknown',
+          details: health.system_health === 'operational' ? 'All endpoints responding' : `Status: ${health.status}`
+        }
+      
+      case 'database':
+        return {
+          status: health.database?.connection_status == "connected",
+          description: health.database?.connection_status == "connected" ? 'Connected' : 'Disconnected',
+          details: `${health.database?.total_entities || 0} entities in database`
+        }
+      
+      case 'filesystem':
+        return {
+          status: health.file_system?.status == "accessible",
+          description: health.file_system?.status == "accessible" ? 'Accessible' : 'Error',
+          details: `${health.file_system?.total_files || 0} files, ${health.file_system?.total_size_mb || 0}MB`
+        }
+      
+      case 'websocket':
+        return {
+          status: wsConnected,
+          description: wsStatus.text,
+          details: reconnectAttempts > 0 ? `${reconnectAttempts} reconnect attempts` : 'Real-time updates active'
+        }
+      
+      default:
+        return {
+          status: false,
+          description: 'Unknown',
+          details: 'Component status unavailable'
+        }
+    }
+  }
+
+  const apiStatus = getComponentStatus('api')
+  const dbStatus = getComponentStatus('database')
+  const fsStatus = getComponentStatus('filesystem')
+  const wsComponentStatus = getComponentStatus('websocket')
+
   const systemComponents = [
     {
       title: 'API Server',
-      status: health?.status === 'healthy',
-      description: health?.status || 'Unknown',
+      status: apiStatus.status,
+      description: apiStatus.description,
       icon: <ApiOutlined />,
-      details: healthError ? 'Connection failed' : 'All endpoints responding'
+      details: apiStatus.details
     },
     {
       title: 'Database',
-      status: health?.database?.connected,
-      description: health?.database?.connected ? 'Connected' : 'Disconnected',
+      status: dbStatus.status,
+      description: dbStatus.description,
       icon: <DatabaseOutlined />,
-      details: `${health?.database?.entity_count || 0} entities in database`
+      details: dbStatus.details
     },
     {
       title: 'File System',
-      status: health?.file_system?.accessible,
-      description: health?.file_system?.accessible ? 'Accessible' : 'Error',
+      status: fsStatus.status,
+      description: fsStatus.description,
       icon: <HddOutlined />,
-      details: `${health?.file_system?.total_entities || 0} files, ${health?.file_system?.total_size_mb || 0}MB`
+      details: fsStatus.details
     },
     {
       title: 'WebSocket',
-      status: wsConnected,
-      description: wsStatus.text,
+      status: wsComponentStatus.status,
+      description: wsComponentStatus.description,
       icon: <WifiOutlined />,
-      details: reconnectAttempts > 0 ? `${reconnectAttempts} reconnect attempts` : 'Real-time updates active'
+      details: wsComponentStatus.details
     }
   ]
+
+  // Overall system health
+  const overallHealthy = !healthError && health?.status === 'healthy' && wsConnected
 
   return (
     <div>
@@ -140,7 +223,7 @@ export const SystemStatus: React.FC = () => {
             <Button 
               icon={<ReloadOutlined />} 
               onClick={handleRefreshAll}
-              loading={healthLoading || statsLoading || validationLoading}
+              loading={healthLoading || validationLoading}
             >
               Refresh Status
             </Button>
@@ -165,26 +248,26 @@ export const SystemStatus: React.FC = () => {
       </Row>
 
       {/* Overall System Health Alert */}
-      {health && (
-        <Alert
-          message={`System Status: ${health.status === 'healthy' ? 'Operational' : 'Issues Detected'}`}
-          description={
-            health.status === 'healthy' 
-              ? 'All systems are functioning normally'
-              : 'Some components require attention'
-          }
-          type={health.status === 'healthy' ? 'success' : 'warning'}
-          showIcon
-          style={{ marginBottom: 24 }}
-          action={
-            health.status !== 'healthy' && (
-              <Button size="small" onClick={handleRefreshAll}>
-                Recheck
-              </Button>
-            )
-          }
-        />
-      )}
+      <Alert
+        message={`System Status: ${overallHealthy ? 'Operational' : 'Issues Detected'}`}
+        description={
+          overallHealthy
+            ? 'All systems are functioning normally'
+            : healthError
+            ? 'Cannot connect to backend server'
+            : 'Some components require attention'
+        }
+        type={overallHealthy ? 'success' : 'warning'}
+        showIcon
+        style={{ marginBottom: 24 }}
+        action={
+          !overallHealthy && (
+            <Button size="small" onClick={handleRefreshAll}>
+              Recheck
+            </Button>
+          )
+        }
+      />
 
       {/* System Components Status */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
@@ -201,7 +284,7 @@ export const SystemStatus: React.FC = () => {
                 {getStatusIcon(component.status)}
               </div>
               <div style={{ marginBottom: 8 }}>
-                {getStatusTag(component.description.toLowerCase(), healthLoading)}
+                {getStatusTag(component.description, healthLoading)}
               </div>
               <Text type="secondary" style={{ fontSize: 12 }}>
                 {component.details}
@@ -221,146 +304,113 @@ export const SystemStatus: React.FC = () => {
                 <span>System Statistics</span>
               </Space>
             } 
-            loading={statsLoading}
+            loading={healthLoading}
             style={{ height: 400 }}
           >
-            {systemStats ? (
+            {health ? (
               <div>
                 <Descriptions column={1} size="small" bordered>
                   <Descriptions.Item label="Database Entities">
                     <Statistic
-                      value={systemStats.database?.total_entities || 0}
+                      value={health.database?.total_entities || 0}
                       valueStyle={{ fontSize: 16 }}
                     />
                   </Descriptions.Item>
                   <Descriptions.Item label="WebSocket Connections">
                     <Statistic
-                      value={systemStats.websocket?.active_connections || 0}
+                      value={health.websocket?.active_connections || 0}
                       valueStyle={{ fontSize: 16, color: wsConnected ? '#52c41a' : '#ff4d4f' }}
                     />
                   </Descriptions.Item>
-                  <Descriptions.Item label="File System Size">
+                  <Descriptions.Item label="File System Entities">
                     <Statistic
-                      value={systemStats.file_system?.total_size_mb || 0}
+                      value={health.file_system?.total_files || 0}
+                      valueStyle={{ fontSize: 16 }}
+                    />
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Storage Size">
+                    <Statistic
+                      value={health.file_system?.total_size_mb || 0}
                       suffix="MB"
                       valueStyle={{ fontSize: 16 }}
                     />
                   </Descriptions.Item>
-                  <Descriptions.Item label="Total Files">
-                    <Statistic
-                      value={systemStats.file_system?.total_entities || 0}
-                      valueStyle={{ fontSize: 16 }}
-                    />
+                  <Descriptions.Item label="Extraction Status">
+                    <Tag color={health.extraction_service?.is_running ? 'processing' : 'default'}>
+                      {health.extraction_service?.status || 'idle'}
+                    </Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="System Version">
+                    <Text code>{health.system?.version || '2.0.0'}</Text>
                   </Descriptions.Item>
                 </Descriptions>
-
-                {systemStats.file_system?.entities_by_type && (
-                  <div style={{ marginTop: 20 }}>
-                    <Text strong>Entity Distribution:</Text>
-                    <div style={{ marginTop: 8 }}>
-                      {Object.entries(systemStats.file_system.entities_by_type).map(([type, count]) => (
-                        <div key={type} style={{ marginBottom: 8 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <Text style={{ textTransform: 'capitalize' }}>{type}</Text>
-                            <Text strong>{count as number}</Text>
-                          </div>
-                          <Progress 
-                            percent={((count as number) / systemStats.file_system.total_entities) * 100} 
-                            size="small" 
-                            showInfo={false}
-                            strokeColor="#1890ff"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             ) : (
               <div style={{ textAlign: 'center', padding: 40 }}>
-                <Text type="secondary">No system statistics available</Text>
+                <Text type="secondary">System statistics unavailable</Text>
               </div>
             )}
           </Card>
         </Col>
 
-        {/* Data Validation Results */}
+        {/* Data Validation */}
         <Col xs={24} lg={12}>
           <Card 
             title={
               <Space>
-                <DatabaseOutlined />
+                <WarningOutlined />
                 <span>Data Validation</span>
               </Space>
             } 
             loading={validationLoading}
-            style={{ height: 400 }}
+            // style={{ height: 400 }}
           >
             {validation ? (
               <div>
-                {validation.status === 'valid' ? (
-                  <Alert
-                    message="Validation Passed"
-                    description="All database entries have corresponding files"
-                    type="success"
-                    showIcon
-                    icon={<CheckCircleOutlined />}
-                    style={{ marginBottom: 20 }}
+                <div style={{ marginBottom: 16 }}>
+                  <Progress
+                    percent={
+                      validation.validation?.total_entities > 0
+                        ? Math.round(
+                            ((validation.validation.total_entities - validation.validation.missing_files) /
+                              validation.validation.total_entities) *
+                            100
+                          )
+                        : 100
+                    }
+                    status={validation.validation?.missing_files > 0 ? 'exception' : 'success'}
                   />
-                ) : (
-                  <Alert
-                    message="Validation Issues Found"
-                    description={`${validation.validation?.missing_files || 0} missing files detected`}
-                    type="warning"
-                    showIcon
-                    icon={<WarningOutlined />}
-                    style={{ marginBottom: 20 }}
-                  />
-                )}
+                </div>
 
-                <Row gutter={16} style={{ marginBottom: 20 }}>
-                  <Col span={8}>
-                    <Card size="small" style={{ textAlign: 'center' }}>
-                      <Statistic
-                        title="Total"
-                        value={validation.validation?.total_entities || 0}
-                        valueStyle={{ color: '#1890ff' }}
-                      />
-                    </Card>
-                  </Col>
-                  <Col span={8}>
-                    <Card size="small" style={{ textAlign: 'center' }}>
-                      <Statistic
-                        title="Valid"
-                        value={validation.validation?.valid_files || 0}
-                        valueStyle={{ color: '#52c41a' }}
-                      />
-                    </Card>
-                  </Col>
-                  <Col span={8}>
-                    <Card size="small" style={{ textAlign: 'center' }}>
-                      <Statistic
-                        title="Missing"
-                        value={validation.validation?.missing_files || 0}
-                        valueStyle={{ color: '#ff4d4f' }}
-                      />
-                    </Card>
-                  </Col>
-                </Row>
+                <Descriptions column={1} size="small" bordered>
+                  <Descriptions.Item label="Total Entities">
+                    {validation.validation?.total_entities || 0}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Valid Files">
+                    {validation.validation?.valid_files || 0}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Missing Files">
+                    <Text type={validation.validation?.missing_files > 0 ? 'danger' : 'secondary'}>
+                      {validation.validation?.missing_files || 0}
+                    </Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Invalid Paths">
+                    <Text type={validation.validation?.invalid_paths > 0 ? 'danger' : 'secondary'}>
+                      {validation.validation?.invalid_paths || 0}
+                    </Text>
+                  </Descriptions.Item>
+                </Descriptions>
 
                 {validation.validation?.errors && validation.validation.errors.length > 0 && (
-                  <div>
-                    <Text strong style={{ marginBottom: 8, display: 'block' }}>
-                      Validation Errors:
-                    </Text>
+                  <div style={{ marginTop: 16 }}>
+                    <Text strong style={{ color: '#ff4d4f' }}>Recent Errors:</Text>
                     <List
                       size="small"
-                      dataSource={validation.validation.errors.slice(0, 5)}
+                      dataSource={validation.validation.errors.slice(0, 2)}
                       renderItem={(error: any) => (
                         <List.Item>
-                          <Text code style={{ fontSize: 12 }}>{error.qid}</Text>
-                          <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
-                            {error.error}
+                          <Text type="danger" style={{ fontSize: 12 }}>
+                            {error.qid}: {error.error}
                           </Text>
                         </List.Item>
                       )}
@@ -383,7 +433,7 @@ export const SystemStatus: React.FC = () => {
           </Card>
         </Col>
 
-        {/* Recent System Events */}
+        {/* System Information */}
         <Col xs={24}>
           <Card 
             title={
@@ -399,7 +449,7 @@ export const SystemStatus: React.FC = () => {
                   <Text strong>Last Health Check:</Text>
                   <div style={{ marginTop: 4 }}>
                     <Text type="secondary">
-                      {health ? dayjs().format('YYYY-MM-DD HH:mm:ss') : 'Never'}
+                      {health?.timestamp ? dayjs(health.timestamp).format('YYYY-MM-DD HH:mm:ss') : 'Never'}
                     </Text>
                   </div>
                 </div>
@@ -422,43 +472,12 @@ export const SystemStatus: React.FC = () => {
                   <Text strong>Sync Status:</Text>
                   <div style={{ marginTop: 4 }}>
                     <Tag color={syncLoading ? 'processing' : 'default'}>
-                      {syncLoading ? 'In Progress' : 'Ready'}
+                      {syncLoading ? 'Syncing...' : 'Ready'}
                     </Tag>
                   </div>
                 </div>
               </Col>
             </Row>
-
-            <div style={{ marginTop: 24, padding: 16, backgroundColor: '#fafafa', borderRadius: 6 }}>
-              <Space direction="vertical" size="small">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <InfoCircleOutlined style={{ color: '#1890ff' }} />
-                  <Text strong>System Health Tips:</Text>
-                </div>
-                <ul style={{ margin: 0, paddingLeft: 20 }}>
-                  <li>
-                    <Text type="secondary">
-                      Run Quick Sync regularly to keep database in sync with files
-                    </Text>
-                  </li>
-                  <li>
-                    <Text type="secondary">
-                      Monitor WebSocket connection for real-time updates
-                    </Text>
-                  </li>
-                  <li>
-                    <Text type="secondary">
-                      Check validation results to ensure data integrity
-                    </Text>
-                  </li>
-                  <li>
-                    <Text type="secondary">
-                      Use Full Sync if you notice inconsistencies
-                    </Text>
-                  </li>
-                </ul>
-              </Space>
-            </div>
           </Card>
         </Col>
       </Row>
