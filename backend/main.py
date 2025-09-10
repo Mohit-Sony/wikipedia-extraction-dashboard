@@ -12,7 +12,7 @@ from database.database import init_database, get_db
 from database.models import Entity,UserDecision,QueueEntry
 
 # API routers
-from api import entities, queues, analytics, websocket, extraction  # NEW: extraction
+from api import entities, queues, analytics, websocket, extraction , files  # NEW: extraction
 
 # Services
 from services.file_service import FileService
@@ -104,6 +104,7 @@ app.include_router(queues.router, prefix="/api/v1", tags=["queues"])
 app.include_router(analytics.router, prefix="/api/v1", tags=["analytics"])
 app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
 app.include_router(extraction.router, prefix="/api/v1", tags=["extraction"])  # NEW
+app.include_router(files.router, prefix="/api/v1", tags=["files"])
 
 # Root endpoint
 @app.get("/")

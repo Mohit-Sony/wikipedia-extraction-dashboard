@@ -348,6 +348,7 @@ class ExtractionService:
         except Exception as e:
             logger.error(f"Extraction failed: {e}")
             await self._complete_extraction(db, "failed")
+
     async def _extract_single_entity(self, db: Session, entity: Entity, config: ExtractionConfig) -> bool:
         """Extract a single entity and process its links"""
         entity_qid = entity.qid  # Store QID for safe reference
@@ -370,7 +371,19 @@ class ExtractionService:
             from services.file_service import FileService
             file_service = FileService()
             
+            # Determine entity type from extracted data or default to 'unknown'
+            entity_type = str(extracted_data.get('type', 'unknown')).replace(' ', '_').replace('/', '_')
+            
+            # Save to file system
+            file_saved = file_service.save_entity_data(entity_qid, entity_type, extracted_data)
+            
+            if not file_saved:
+                logger.warning(f"Failed to save file for entity {entity_qid}, but continuing with database update")
+                # Don't fail the entire extraction, just log the issue
+            
+
             # Update entity with extracted metadata
+            entity.entity_type = entity_type  # Update entity type from extracted data
             entity.num_links = len(extracted_data.get('links', {}).get('internal_links', []))
             entity.num_tables = len(extracted_data.get('tables', []))
             entity.num_images = len(extracted_data.get('images', []))

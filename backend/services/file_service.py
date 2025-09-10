@@ -13,6 +13,51 @@ class FileService:
         self.data_dir = Path(wikipedia_data_dir)
         self.data_dir.mkdir(exist_ok=True)
         
+    # Add this method to FileService class
+
+    def save_entity_data(self, qid: str, entity_type: str, data: Dict[str, Any]) -> bool:
+        """Save entity data to JSON file in wikipedia_data directory"""
+        try:
+            # Get file path and ensure directory exists
+            file_path = self.get_entity_file_path(qid, entity_type)
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Add extraction metadata
+            data['extraction_metadata'] = {
+                'timestamp': datetime.now().isoformat(),
+                'pipeline_version': '2.0',
+                'source': 'api_extraction'
+            }
+            
+            # Save JSON file
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            
+            logger.info(f"Successfully saved entity {qid} to {file_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to save entity {qid}: {e}")
+            return False
+
+    def delete_entity_data(self, qid: str, entity_type: str) -> bool:
+        """Delete entity data file"""
+        try:
+            file_path = self.get_entity_file_path(qid, entity_type)
+            if file_path.exists():
+                file_path.unlink()
+                logger.info(f"Deleted entity file: {file_path}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Failed to delete entity {qid}: {e}")
+            return False
+
+    def entity_file_exists(self, qid: str, entity_type: str) -> bool:
+        """Check if entity file exists"""
+        file_path = self.get_entity_file_path(qid, entity_type)
+        return file_path.exists()
+
     def get_entity_file_path(self, qid: str, entity_type: str) -> Path:
         """Get the file path for an entity's JSON file"""
         type_dir = self.data_dir / entity_type.replace(' ', '_').replace('/', '_')
