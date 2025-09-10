@@ -282,7 +282,7 @@ export const ExtractionControls: React.FC = () => {
             } | 
             Total : ${session.total_entities} | 
                          Extracted: ${session.processed_entities} | 
-                         Percent:${session.progress_percentage}
+                         Percent:${session.progress_percentage?.toFixed(2) ?? 0}
                          Errors: ${session.failed_entities} | 
                          Skipped: ${session?.skipped_entities || 0}`}
             type="info"
@@ -370,7 +370,7 @@ export const ExtractionControls: React.FC = () => {
       <Col span={8}>
         <Statistic
           title="Progress"
-          value={session.progress_percentage ?? 0}
+          value={session.progress_percentage?.toFixed(2) ?? 0}
           precision={1}
           suffix="%"
         />

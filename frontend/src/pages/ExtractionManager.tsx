@@ -342,12 +342,12 @@ export const ExtractionManager: React.FC = () => {
             <Col xs={24} lg={18}>
               <ReviewQueue />
             </Col>
-            <Col xs={24} lg={6}>
+            {/* <Col xs={24} lg={6}>
               <DiscoverySourceFilter
                 selectedSource={discoverySourceFilter}
                 onSourceSelect={setDiscoverySourceFilter}
               />
-            </Col>
+            </Col> */}
           </Row>
         </TabPane>
 
