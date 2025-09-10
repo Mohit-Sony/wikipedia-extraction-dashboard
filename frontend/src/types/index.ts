@@ -113,6 +113,19 @@ export interface ExtractionSession {
   queue_size: number;
 }
 
+export interface ExtractionSessionStatus {
+  status: ExtractionStatus
+  session_id: number | null
+  current_entity: string | null
+  progress_percentage: number
+  total_entities: number
+  processed_entities: number
+  failed_entities: number
+  skipped_entities: number
+  discovered_entities: number
+  start_time: string | null   // ISO datetime when running, null when idle
+  estimated_completion: string | null // ISO datetime or null
+}
 export interface ExtractionProgress {
   session_id: string
   current_entity_qid: string | null

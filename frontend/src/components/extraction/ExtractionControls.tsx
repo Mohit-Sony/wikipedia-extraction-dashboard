@@ -103,8 +103,8 @@ export const ExtractionControls: React.FC = () => {
 
   // Status and session info
   const status = statusData?.status || ExtractionStatus.IDLE
-  const session = statusData?.current_session
-  const progress = statusData?.progress
+  const session = statusData
+  // const progress = statusData?.progress
 
   // Button states
   const canStart = status === ExtractionStatus.IDLE && selectedQueues.length > 0
@@ -273,11 +273,18 @@ export const ExtractionControls: React.FC = () => {
         {/* Current Session Info */}
         {session && (
           <Alert
-            message={`Active Session: ${session.session_name}`}
-            description={`Started: ${new Date(session.start_time).toLocaleString()} | 
-                         Extracted: ${session.total_extracted} | 
-                         Errors: ${session.total_errors} | 
-                         Skipped: ${session?.total_duplicates || 0}`}
+            message={`Active Session: ${session.session_id}`}
+            // description={`Started: ${new Date(session.start_time).toLocaleString()} | 
+            description={`Started: ${
+              session.start_time
+                ? new Date(session.start_time).toLocaleString()
+                : 'Not started'
+            } | 
+            Total : ${session.total_entities} | 
+                         Extracted: ${session.processed_entities} | 
+                         Percent:${session.progress_percentage}
+                         Errors: ${session.failed_entities} | 
+                         Skipped: ${session?.skipped_entities || 0}`}
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
@@ -356,36 +363,34 @@ export const ExtractionControls: React.FC = () => {
           })}
         </Row>
 
-        {/* Progress Info */}
-        {progress && status === ExtractionStatus.RUNNING && (
-          <>
-            <Divider />
-            <Row gutter={16}>
-              <Col span={8}>
-                <Statistic
-                  title="Progress"
-                  value={progress.progress_percentage || 0}
-                  precision={1}
-                  suffix="%"
-                />
-              </Col>
-              <Col span={8}>
-                <Statistic
-                  title="Processed"
-                  value={progress.processed_count || 0}
-                  // suffix={`/ ${progress.total || 0}`}
-                />
-              </Col>
-              {/* <Col span={8}>
-                <Statistic
-                  title="Discovery Rate"
-                  value={progress.entities_discovered || 0}
-                  suffix="discovered"
-                />
-              </Col> */}
-            </Row>
-          </>
-        )}
+{session?.status === ExtractionStatus.RUNNING && (
+  <>
+    <Divider />
+    <Row gutter={16}>
+      <Col span={8}>
+        <Statistic
+          title="Progress"
+          value={session.progress_percentage ?? 0}
+          precision={1}
+          suffix="%"
+        />
+      </Col>
+      <Col span={8}>
+        <Statistic
+          title="Processed"
+          value={session.processed_entities ?? 0}
+          suffix={`/ ${session.total_entities ?? 0}`}
+        />
+      </Col>
+      <Col span={8}>
+        <Statistic
+          title="Discovered"
+          value={session.discovered_entities ?? 0}
+        />
+      </Col>
+    </Row>
+  </>
+)}
       </Card>
 
       {/* Configuration Modal */}

@@ -61,8 +61,8 @@ export const ExtractionMonitor: React.FC = () => {
     data: logsData, 
     isLoading: logsLoading 
   } = useGetSessionLogsQuery(
-    { session_id: statusData?.current_session?.id || 0 },
-    { skip: !statusData?.current_session?.id }
+    { session_id: statusData?.session_id || 0 },
+    { skip: !statusData?.failed_entities }
   )
 
   const getStatusColor = (status: ExtractionStatus) => {
@@ -99,27 +99,27 @@ export const ExtractionMonitor: React.FC = () => {
     }
   }
 
-  const calculateProgress = () => {
-    if (!statusData?.progress) return 0
-    const { entities_processed, queue_size } = statusData.progress
-    const total = entities_processed + queue_size
-    return total > 0 ? Math.round((entities_processed / total) * 100) : 0
-  }
+  // const calculateProgress = () => {
+  //   if (!statusData?.progress) return 0
+  //   const { entities_processed, queue_size } = statusData.progress
+  //   const total = entities_processed + queue_size
+  //   return total > 0 ? Math.round((entities_processed / total) * 100) : 0
+  // }
 
-  const calculateETA = () => {
-    const progress = statusData?.progress
-    if (!progress || progress.extraction_rate <= 0 || progress.queue_size <= 0) {
-      return null
-    }
+  // const calculateETA = () => {
+  //   const progress = statusData?.progress
+  //   if (!progress || progress.extraction_rate <= 0 || progress.queue_size <= 0) {
+  //     return null
+  //   }
     
-    const remainingSeconds = progress.queue_size / progress.extraction_rate
-    return dayjs.duration(remainingSeconds, 'seconds').humanize()
-  }
+  //   const remainingSeconds = progress.queue_size / progress.extraction_rate
+  //   return dayjs.duration(remainingSeconds, 'seconds').humanize()
+  // }
 
-  const formatExtractionRate = () => {
-    const rate = statusData?.progress?.extraction_rate || 0
-    return rate > 0 ? `${rate.toFixed(2)} entities/min` : 'Calculating...'
-  }
+  // const formatExtractionRate = () => {
+  //   const rate = statusData?.progress?.extraction_rate || 0
+  //   return rate > 0 ? `${rate.toFixed(2)} entities/min` : 'Calculating...'
+  // }
 
   if (statusLoading && !statusData) {
     return (
@@ -132,8 +132,8 @@ export const ExtractionMonitor: React.FC = () => {
   }
 
   const status = statusData?.status || ExtractionStatus.IDLE
-  const session = statusData?.current_session
-  const progress = statusData?.progress
+  const session = statusData
+  // const progress = statusData?.progress
 
   return (
     <>
@@ -175,7 +175,7 @@ export const ExtractionMonitor: React.FC = () => {
         ) : (
           <>
             {/* Progress Section */}
-            {progress && (
+            {/* {progress && (
               <div style={{ marginBottom: 24 }}>
                 <Title level={5}>Progress Overview</Title>
                 <Progress
@@ -228,40 +228,60 @@ export const ExtractionMonitor: React.FC = () => {
                   </div>
                 )}
               </div>
-            )}
+            )} */}
 
-            {/* Session Information */}
-            {session && (
-              <div style={{ marginBottom: 24 }}>
-                <Title level={5}>Session Information</Title>
-                <Descriptions column={2} size="small" bordered>
-                  <Descriptions.Item label="Session Name">
-                    {session.session_name}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Started">
-                    {dayjs(session.start_time).format('YYYY-MM-DD HH:mm:ss')}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Duration">
-                    {session.end_time 
-                      ? dayjs(session.end_time).diff(dayjs(session.start_time), 'minute') + ' minutes'
-                      : dayjs().diff(dayjs(session.start_time), 'minute') + ' minutes'
-                    }
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Current Depth">
-                    {progress?.current_depth || 0}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Total Extracted">
-                    {session.total_extracted}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="Total Errors">
-                    {session.total_errors}
-                  </Descriptions.Item>
-                </Descriptions>
-              </div>
-            )}
-
+{/* Session Information */}
+{session && (
+  <div style={{ marginBottom: 24 }}>
+    <Title level={5}>Session Information</Title>
+    <Descriptions column={2} size="small" bordered>
+      <Descriptions.Item label="Session ID">
+        {session.session_id ?? '—'}
+      </Descriptions.Item>
+      <Descriptions.Item label="Status">
+        {session.status}
+      </Descriptions.Item>
+      <Descriptions.Item label="Started">
+        {session.start_time
+          ? dayjs(session.start_time).format('YYYY-MM-DD HH:mm:ss')
+          : 'Not started'}
+      </Descriptions.Item>
+      <Descriptions.Item label="ETA">
+        {session.estimated_completion
+          ? dayjs(session.estimated_completion).format('YYYY-MM-DD HH:mm:ss')
+          : '—'}
+      </Descriptions.Item>
+      <Descriptions.Item label="Duration">
+        {session.start_time && session.estimated_completion
+          ? `${dayjs(session.estimated_completion).diff(
+              dayjs(session.start_time),
+              'minute'
+            )} minutes`
+          : '—'}
+      </Descriptions.Item>
+      <Descriptions.Item label="Current Entity QID">
+        {session.current_entity ?? '—'}
+      </Descriptions.Item>
+      <Descriptions.Item label="Progress %">
+        {session.progress_percentage?.toFixed(2) ?? 0}%
+      </Descriptions.Item>
+      <Descriptions.Item label="Processed">
+        {session.processed_entities ?? 0} / {session.total_entities ?? 0}
+      </Descriptions.Item>
+      <Descriptions.Item label="Failed">
+        {session.failed_entities ?? 0}
+      </Descriptions.Item>
+      <Descriptions.Item label="Skipped">
+        {session.skipped_entities ?? 0}
+      </Descriptions.Item>
+      <Descriptions.Item label="Discovered">
+        {session.discovered_entities ?? 0}
+      </Descriptions.Item>
+    </Descriptions>
+  </div>
+)}
             {/* Deduplication Statistics */}
-            {dedupStats && (
+            {/* {dedupStats && (
               <div style={{ marginBottom: 24 }}>
                 <Title level={5}>Smart Deduplication</Title>
                 <Row gutter={16}>
@@ -307,62 +327,73 @@ export const ExtractionMonitor: React.FC = () => {
                   </div>
                 </div>
               </div>
-            )}
+            )} */}
 
-            {/* Recent Activity Timeline */}
-            {progress && (
-              <div>
-                <Title level={5}>
-                  <Space>
-                    <LinkOutlined />
-                    Discovery Activity
-                  </Space>
-                </Title>
-                <Timeline
-                  items={[
-                    {
-                      color: 'blue',
-                      children: (
-                        <div>
-                          <Text strong>Currently Processing</Text>
-                          <br />
-                          <Text type="secondary">{progress.current_entity}</Text>
-                          <br />
-                          <Text type="secondary">Depth: {progress.current_depth}</Text>
-                        </div>
-                      ),
-                    },
-                    {
-                      color: 'green',
-                      children: (
-                        <div>
-                          <Text>Entities Discovered</Text>
-                          <br />
-                          <Text type="secondary">{progress.entities_discovered} total found</Text>
-                        </div>
-                      ),
-                    },
-                    {
-                      color: 'orange',
-                      children: (
-                        <div>
-                          <Text>Queue Status</Text>
-                          <br />
-                          <Text type="secondary">{progress.queue_size} entities remaining</Text>
-                        </div>
-                      ),
-                    },
-                  ]}
-                />
-              </div>
-            )}
+{/* Recent Activity Timeline */}
+{session?.status === ExtractionStatus.RUNNING && (
+  <div>
+    <Title level={5}>
+      <Space>
+        <LinkOutlined />
+        Discovery Activity
+      </Space>
+    </Title>
+
+    <Timeline
+      items={[
+        {
+          color: 'blue',
+          children: (
+            <div>
+              <Text strong>Currently Processing</Text>
+              <br />
+              <Text type="secondary">
+                QID: {session.current_entity ?? '—'}
+              </Text>
+              <br />
+              <Text type="secondary">
+                Title: {session.current_entity ?? '—'}
+              </Text>
+            </div>
+          ),
+        },
+        {
+          color: 'green',
+          children: (
+            <div>
+              <Text>Entities Discovered</Text>
+              <br />
+              <Text type="secondary">
+                {session.discovered_entities ?? 0} total found
+              </Text>
+            </div>
+          ),
+        },
+        {
+          color: 'orange',
+          children: (
+            <div>
+              <Text>Queue Status</Text>
+              <br />
+              <Text type="secondary">
+                {session.total_entities && session.processed_entities !== null
+                  ? `${session.total_entities - session.processed_entities} entities remaining`
+                  : '—'}
+              </Text>
+            </div>
+          ),
+        },
+      ]}
+    />
+  </div>
+)}
           </>
         )}
       </Card>
 
       {/* Session Logs Modal */}
       <Modal
-        title={`Session Logs - ${session?.session_name || 'Current Session'}`}
+        title={`Session Logs - ${session?.session_id || 'Current Session'}`}
         open={logsModalOpen}
         onCancel={() => setLogsModalOpen(false)}
         width={800}

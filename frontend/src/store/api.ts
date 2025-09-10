@@ -25,7 +25,8 @@ import type {
   ManualEntityRequest,
   ManualEntityResponse,
   BulkReviewOperation,
-  BulkReviewResult
+  BulkReviewResult,
+  ExtractionSessionStatus
 } from '../types'
 
 export const api = createApi({
@@ -265,14 +266,10 @@ export const api = createApi({
       invalidatesTags: ['Extraction', 'Queue', 'Dashboard'],
     }),
 
-    getExtractionStatus: builder.query<{
-      status: ExtractionStatus;
-      current_session?: ExtractionSession;
-      progress?: ExtractionProgress;
-    }, void>({
-      query: () => 'extraction/status',
-      providesTags: ['Extraction'],
-    }),
+getExtractionStatus: builder.query<ExtractionSessionStatus, void>({
+  query: () => 'extraction/status',
+  providesTags: ['Extraction'],
+}),
 
     configureExtraction: builder.mutation<{ 
       success: boolean; 

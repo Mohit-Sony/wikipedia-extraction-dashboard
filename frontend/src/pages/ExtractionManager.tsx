@@ -30,19 +30,19 @@ export const ExtractionManager: React.FC = () => {
   const [discoverySourceFilter, setDiscoverySourceFilter] = useState<string | undefined>()
 
   const { data: extractionStatus, refetch: refetchStatus } = useGetExtractionStatusQuery()
-  const { data: reviewQueueData } = useGetQueueEntitiesQuery({ 
+  const { data: reviewQueueData } = useGetQueueEntitiesQuery({
     queue_type: QueueType.REVIEW,
     limit: 1 // Just for count
   })
-  const { data: activeQueueData } = useGetQueueEntitiesQuery({ 
+  const { data: activeQueueData } = useGetQueueEntitiesQuery({
     queue_type: QueueType.ACTIVE,
     limit: 1 // Just for count
   })
   const { data: dedupStats } = useGetDeduplicationStatsQuery()
 
   const status = extractionStatus?.status || ExtractionStatus.IDLE
-  const session = extractionStatus?.current_session
-  const progress = extractionStatus?.progress
+  const session = extractionStatus
+  // const progress = extractionStatus?.progress
 
   const getStatusColor = (status: ExtractionStatus) => {
     switch (status) {
@@ -75,8 +75,8 @@ export const ExtractionManager: React.FC = () => {
           </Text>
         </Col>
         <Col>
-          <Button 
-            icon={<ReloadOutlined />} 
+          <Button
+            icon={<ReloadOutlined />}
             onClick={() => refetchStatus()}
           >
             Refresh Status
@@ -126,19 +126,19 @@ export const ExtractionManager: React.FC = () => {
       </Row>
 
       {/* Main Content Tabs */}
-      <Tabs 
-        activeKey={activeTab} 
+      <Tabs
+        activeKey={activeTab}
         onChange={setActiveTab}
         size="large"
         type="card"
       >
-        {/* <TabPane 
+        <TabPane
           tab={
             <Space>
               <MonitorOutlined />
               Extraction Monitor
             </Space>
-          } 
+          }
           key="monitor"
         >
           <Row gutter={[16, 16]}>
@@ -149,15 +149,15 @@ export const ExtractionManager: React.FC = () => {
               <ExtractionControls />
             </Col>
           </Row>
-        </TabPane> */}
+        </TabPane>
 
-        <TabPane 
+        <TabPane
           tab={
             <Space>
               <ControlOutlined />
               Extraction Controls
             </Space>
-          } 
+          }
           key="controls"
         >
           <Row gutter={[16, 16]}>
@@ -165,64 +165,129 @@ export const ExtractionManager: React.FC = () => {
               <ExtractionControls />
             </Col>
             <Col xs={24} lg={12}>
-              <Card 
+              <Card
                 title="Current Session Info"
                 style={{ height: 600 }}
               >
                 {session ? (
                   <div>
-                    <Title level={5}>{session.session_name}</Title>
-                    <Text type="secondary">
-                      Started: {new Date(session.start_time).toLocaleString()}
-                    </Text>
-                    
+                    <Title level={5}>{`Session #${session.session_id}`}</Title>
+
+                    {session.start_time && (
+                      <Text type="secondary">
+                        Started: {new Date(session.start_time).toLocaleString()}
+                      </Text>
+                    )}
+
                     <Row gutter={16} style={{ marginTop: 20 }}>
                       <Col span={12}>
                         <Statistic
                           title="Extracted"
-                          value={session.total_extracted}
+                          value={session.processed_entities ?? 0}
                           valueStyle={{ color: '#52c41a' }}
                         />
                       </Col>
                       <Col span={12}>
                         <Statistic
                           title="Errors"
-                          value={session.total_errors}
+                          value={session.failed_entities ?? 0}
                           valueStyle={{ color: '#ff4d4f' }}
                         />
                       </Col>
                     </Row>
 
-                    {progress && (
-                      <div style={{ marginTop: 20 }}>
-                        <Title level={5}>Current Progress</Title>
-                        <Text>Processing: {progress.current_entity}</Text>
-                        <br />
-                        <Text type="secondary">
-                          Queue Size: {progress.queue_size} | 
-                          Depth: {progress.current_depth} |
-                          Rate: {progress.extraction_rate.toFixed(2)}/min
-                        </Text>
+                    {/* Show progress only when extraction is running */}
+                    {session ? (
+                      <div>
+                        <Title level={5}>
+                          {session.session_id ? `Session #${session.session_id}` : 'No Active Session'}
+                        </Title>
+
+                        {session.start_time && (
+                          <Text type="secondary">
+                            Started: {new Date(session.start_time).toLocaleString()}
+                          </Text>
+                        )}
+
+                        <Row gutter={16} style={{ marginTop: 20 }}>
+                          <Col span={12}>
+                            <Statistic
+                              title="Processed"
+                              value={session.processed_entities ?? 0}
+                              valueStyle={{ color: '#1890ff' }}
+                            />
+                          </Col>
+                          <Col span={12}>
+                            <Statistic
+                              title="Failed"
+                              value={session.failed_entities ?? 0}
+                              valueStyle={{ color: '#ff4d4f' }}
+                            />
+                          </Col>
+                        </Row>
+
+                        <Row gutter={16} style={{ marginTop: 20 }}>
+                          <Col span={12}>
+                            <Statistic
+                              title="Skipped"
+                              value={session.skipped_entities ?? 0}
+                              valueStyle={{ color: '#faad14' }}
+                            />
+                          </Col>
+                          <Col span={12}>
+                            <Statistic
+                              title="Discovered"
+                              value={session.discovered_entities ?? 0}
+                              valueStyle={{ color: '#52c41a' }}
+                            />
+                          </Col>
+                        </Row>
+
+                        {session.status === 'running' && (
+                          <div style={{ marginTop: 20 }}>
+                            <Title level={5}>Current Progress</Title>
+
+                            <Text>
+                              Processing: {session.current_entity ?? '—'}
+                            </Text>
+                            <br />
+
+                            <Text type="secondary">
+                              Progress: {session.progress_percentage?.toFixed(2) ?? 0}% |{' '}
+                              Total: {session.total_entities ?? 0} |{' '}
+                              Processed: {session.processed_entities ?? 0}
+                            </Text>
+
+                            {session.estimated_completion && (
+                              <>
+                                <br />
+                                <Text type="secondary">
+                                  ETA: {new Date(session.estimated_completion).toLocaleTimeString()}
+                                </Text>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
+                    ) : (
+                      <Text type="secondary">No session data available</Text>
                     )}
                   </div>
                 ) : (
-                  <div style={{ textAlign: 'center', padding: 40 }}>
-                    <Text type="secondary">No active extraction session</Text>
-                  </div>
+                  <Text type="secondary">No active session</Text>
                 )}
               </Card>
             </Col>
           </Row>
         </TabPane>
 
-        <TabPane 
+        <TabPane
           tab={
             <Space>
               <PlusOutlined />
               Manual Entry
             </Space>
-          } 
+          }
           key="manual"
         >
           <Row gutter={[16, 16]}>
@@ -264,13 +329,13 @@ export const ExtractionManager: React.FC = () => {
           </Row>
         </TabPane>
 
-        <TabPane 
+        <TabPane
           tab={
             <Space>
               <FilterOutlined />
               Review Queue
             </Space>
-          } 
+          }
           key="review"
         >
           <Row gutter={[16, 16]}>
@@ -286,16 +351,16 @@ export const ExtractionManager: React.FC = () => {
           </Row>
         </TabPane>
 
-        {/* <TabPane 
+        <TabPane
           tab={
             <Space>
               <BarChartOutlined />
               Statistics
             </Space>
-          } 
+          }
           key="stats"
         >
-          <Row gutter={[16, 16]}>
+          {/* <Row gutter={[16, 16]}>
             <Col xs={24} lg={12}>
               <Card title="Deduplication Statistics">
                 {dedupStats ? (
@@ -383,8 +448,8 @@ export const ExtractionManager: React.FC = () => {
                 )}
               </Card>
             </Col>
-          </Row>
-        </TabPane> */}
+          </Row> */}
+        </TabPane>
       </Tabs>
     </div>
   )

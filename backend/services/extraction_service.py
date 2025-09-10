@@ -277,12 +277,14 @@ class ExtractionService:
             for entity in entities_to_process:
                 self._move_entity_to_processing(db, entity)
             
-            total_entities = len(entities_to_process)
+            # Store entity info safely to avoid session binding issues
+            entity_info_list = [(entity.qid, entity.title) for entity in entities_to_process]
+            total_entities = len(entity_info_list)
             processed_count = 0
             
             logger.info(f"Starting extraction of {total_entities} entities")
             
-            for entity in entities_to_process:
+            for entity_qid, entity_title in entity_info_list:
                 if self.should_stop:
                     break
                 
@@ -293,8 +295,15 @@ class ExtractionService:
                 if self.should_stop:
                     break
                 
+                # Get fresh entity from database for each iteration to avoid session issues
+                entity = db.query(Entity).filter(Entity.qid == entity_qid).first()
+                if not entity:
+                    logger.error(f"Entity {entity_qid} not found, skipping")
+                    processed_count += 1
+                    continue
+                
                 # Update current entity
-                self.current_session.current_entity_qid = entity.qid
+                self.current_session.current_entity_qid = entity_qid
                 self.current_session.progress_percentage = (processed_count / total_entities) * 100
                 db.commit()
                 
@@ -302,8 +311,8 @@ class ExtractionService:
                 if self.websocket_manager:
                     await self.websocket_manager.notify_extraction_progress({
                         "session_id": self.current_session.id,
-                        "current_entity_qid": entity.qid,
-                        "current_entity_title": entity.title,
+                        "current_entity_qid": entity_qid,
+                        "current_entity_title": entity_title,
                         "progress_percentage": self.current_session.progress_percentage,
                         "processed_count": processed_count,
                         "total_count": total_entities
@@ -319,7 +328,15 @@ class ExtractionService:
                 else:
                     self.current_session.total_errors += 1
                 
-                db.commit()
+                # Commit session stats
+                try:
+                    db.commit()
+                except Exception as commit_error:
+                    logger.error(f"Error committing session stats: {commit_error}")
+                    try:
+                        db.rollback()
+                    except:
+                        pass
                 
                 # Pause between requests
                 await asyncio.sleep(config.pause_between_requests)
@@ -331,21 +348,20 @@ class ExtractionService:
         except Exception as e:
             logger.error(f"Extraction failed: {e}")
             await self._complete_extraction(db, "failed")
-    
     async def _extract_single_entity(self, db: Session, entity: Entity, config: ExtractionConfig) -> bool:
         """Extract a single entity and process its links"""
+        entity_qid = entity.qid  # Store QID for safe reference
+        entity_title = entity.title  # Store title for safe reference
+        
         try:
             # Log extraction start
-            self._log_extraction_event(db, "started", entity.qid, {"title": entity.title})
+            self._log_extraction_event(db, "started", entity_qid, {"title": entity_title})
             
             # Perform extraction
-            extracted_data = await extract_wikipedia_page_optimized(entity.title)
-            
-            # TODO remove print
-            print("--------------   Extraction Complete here are the extraction result ...>>>>>>>>>>.... : ",extracted_data)
+            extracted_data = await extract_wikipedia_page_optimized(entity_title)
 
             if not extracted_data:
-                self._log_extraction_event(db, "failed", entity.qid, {"error": "No data returned"})
+                self._log_extraction_event(db, "failed", entity_qid, {"error": "No data returned"})
                 entity.status = EntityStatus.FAILED.value
                 self._move_entity_to_queue(db, entity, QueueType.FAILED)
                 return False
@@ -370,7 +386,19 @@ class ExtractionService:
             if config.auto_add_to_review:
                 await self._process_discovered_links(db, entity, extracted_data)
             
-            self._log_extraction_event(db, "completed", entity.qid, {
+            # After processing links, refresh entity from database in case of rollbacks
+            try:
+                db.refresh(entity)
+            except Exception as refresh_error:
+                # If refresh fails, re-query the entity
+                logger.warning(f"Could not refresh entity {entity_qid}, re-querying: {refresh_error}")
+                entity = db.query(Entity).filter(Entity.qid == entity_qid).first()
+                if not entity:
+                    logger.error(f"Entity {entity_qid} not found after re-query")
+                    return False
+            
+            # Log completion with safely accessed attributes
+            self._log_extraction_event(db, "completed", entity_qid, {
                 "num_links": entity.num_links,
                 "num_tables": entity.num_tables,
                 "num_images": entity.num_images,
@@ -382,16 +410,26 @@ class ExtractionService:
         except Exception as e:
             try:
                 db.rollback()  # Rollback the failed transaction
-                logger.error(f"Failed to extract entity {entity.qid}: {e}")
-                self._log_extraction_event(db, "failed", entity.qid, {"error": str(e)})
-                entity.status = EntityStatus.FAILED.value
-                self._move_entity_to_queue(db, entity, QueueType.FAILED)
-                db.commit()  # Commit the status change
+                logger.error(f"Failed to extract entity {entity_qid}: {e}")
+                self._log_extraction_event(db, "failed", entity_qid, {"error": str(e)})
+                
+                # Re-query entity after rollback to ensure it's bound to session
+                entity = db.query(Entity).filter(Entity.qid == entity_qid).first()
+                if entity:
+                    entity.status = EntityStatus.FAILED.value
+                    self._move_entity_to_queue(db, entity, QueueType.FAILED)
+                    db.commit()  # Commit the status change
+                else:
+                    logger.error(f"Could not find entity {entity_qid} to update status")
+                    
             except Exception as rollback_error:
-                logger.error(f"Error during rollback for entity {entity.qid}: {rollback_error}")
-                db.rollback()  # Final attempt to clean state
+                logger.error(f"Error during rollback for entity {entity_qid}: {rollback_error}")
+                try:
+                    db.rollback()  # Final attempt to clean state
+                except:
+                    pass
             return False
-    
+        
     async def _process_discovered_links(self, db: Session, parent_entity: Entity, extracted_data: Dict):
         """Process discovered links with smart deduplication"""
         internal_links = extracted_data.get('links', {}).get('internal_links', [])
