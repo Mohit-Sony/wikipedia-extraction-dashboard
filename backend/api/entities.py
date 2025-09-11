@@ -211,9 +211,9 @@ async def get_entity_preview(qid: str, db: Session = Depends(get_db)):
             {
                 "index": i,
                 "url": image.get('url', ''),
-                "alt": image.get('alt', ''),
-                "caption": image.get('caption', '') if image.get('caption') else None,
-                "filename": image.get('filename', '') if image.get('filename') else None
+                "alt": image.get('title', ''),
+                "caption": image.get('description', '') if image.get('description') else None,
+                "filename": image.get('title', '') if image.get('title') else None
             }
             for i, image in enumerate(images[:10])  # First 10 images
         ],
