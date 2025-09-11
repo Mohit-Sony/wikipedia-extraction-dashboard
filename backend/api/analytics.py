@@ -1,7 +1,7 @@
 # backend/api/analytics.py
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc, extract, and_
+from sqlalchemy import case, func, desc, extract, and_
 from database.database import get_db
 from database.models import Entity, QueueEntry, UserDecision, ExtractionSession
 from utils.schemas import DashboardStats, QueueStats, TypeStats , EntityResponse
@@ -136,8 +136,8 @@ async def get_type_analysis(db: Session = Depends(get_db)):
     type_analysis = db.query(
         Entity.type,
         func.count(Entity.id).label('total_count'),
-        func.sum(func.case([(Entity.status == "completed", 1)], else_=0)).label('completed_count'),
-        func.sum(func.case([(Entity.status == "failed", 1)], else_=0)).label('failed_count'),
+        func.sum(case((Entity.status == "completed", 1), else_=0)).label('completed_count'),
+        func.sum(case((Entity.status == "failed", 1), else_=0)).label('failed_count'),
         func.avg(Entity.num_links).label('avg_links'),
         func.avg(Entity.num_tables).label('avg_tables'),
         func.avg(Entity.num_images).label('avg_images'),
@@ -153,7 +153,7 @@ async def get_type_analysis(db: Session = Depends(get_db)):
                 "total_count": stat.total_count,
                 "completed_count": stat.completed_count or 0,
                 "failed_count": stat.failed_count or 0,
-                "success_rate": round((stat.completed_count or 0) / stat.total_count * 100, 2),
+                "success_rate": round((stat.completed_count or 0) / stat.total_count * 100, 2) if stat.total_count else 0,
                 "avg_links": round(stat.avg_links or 0, 2),
                 "avg_tables": round(stat.avg_tables or 0, 2),
                 "avg_images": round(stat.avg_images or 0, 2),
@@ -164,7 +164,6 @@ async def get_type_analysis(db: Session = Depends(get_db)):
             for stat in type_analysis
         ]
     }
-
 @router.get("/analytics/depth-analysis")
 async def get_depth_analysis(db: Session = Depends(get_db)):
     """Analyze extraction by depth levels"""
@@ -279,36 +278,39 @@ async def get_user_decision_patterns(
         ]
     }
 
+
 @router.get("/analytics/content-quality")
 async def get_content_quality_metrics(db: Session = Depends(get_db)):
     """Analyze content quality metrics"""
     # Distribution of page lengths
     page_length_dist = db.query(
-        func.case([
+        case(
             (Entity.page_length < 1000, 'Very Short'),
             (Entity.page_length < 5000, 'Short'),
             (Entity.page_length < 20000, 'Medium'),
-            (Entity.page_length < 50000, 'Long')
-        ], else_='Very Long').label('length_category'),
+            (Entity.page_length < 50000, 'Long'),
+            else_='Very Long'
+        ).label('length_category'),
         func.count(Entity.id).label('count')
     ).group_by('length_category').all()
     
     # Distribution of link counts
     link_count_dist = db.query(
-        func.case([
+        case(
             (Entity.num_links == 0, 'No Links'),
             (Entity.num_links < 5, 'Few Links'),
             (Entity.num_links < 20, 'Some Links'),
-            (Entity.num_links < 50, 'Many Links')
-        ], else_='Very Many Links').label('link_category'),
+            (Entity.num_links < 50, 'Many Links'),
+            else_='Very Many Links'
+        ).label('link_category'),
         func.count(Entity.id).label('count')
     ).group_by('link_category').all()
     
     # Entities with rich content (tables, images, etc.)
     rich_content = db.query(
-        func.sum(func.case([(Entity.num_tables > 0, 1)], else_=0)).label('with_tables'),
-        func.sum(func.case([(Entity.num_images > 0, 1)], else_=0)).label('with_images'),
-        func.sum(func.case([(Entity.num_chunks > 5, 1)], else_=0)).label('well_structured'),
+        func.sum(case((Entity.num_tables > 0, 1), else_=0)).label('with_tables'),
+        func.sum(case((Entity.num_images > 0, 1), else_=0)).label('with_images'),
+        func.sum(case((Entity.num_chunks > 5, 1), else_=0)).label('well_structured'),
         func.count(Entity.id).label('total')
     ).first()
     
@@ -326,12 +328,11 @@ async def get_content_quality_metrics(db: Session = Depends(get_db)):
             "entities_with_images": rich_content.with_images or 0,
             "well_structured_entities": rich_content.well_structured or 0,
             "total_entities": rich_content.total,
-            "table_percentage": round((rich_content.with_tables or 0) / rich_content.total * 100, 2),
-            "image_percentage": round((rich_content.with_images or 0) / rich_content.total * 100, 2),
-            "structure_percentage": round((rich_content.well_structured or 0) / rich_content.total * 100, 2)
+            "table_percentage": round((rich_content.with_tables or 0) / rich_content.total * 100, 2) if rich_content.total else 0,
+            "image_percentage": round((rich_content.with_images or 0) / rich_content.total * 100, 2) if rich_content.total else 0,
+            "structure_percentage": round((rich_content.well_structured or 0) / rich_content.total * 100, 2) if rich_content.total else 0
         }
     }
-
 @router.get("/analytics/extraction-performance")
 async def get_extraction_performance(
     days: int = Query(7, description="Number of days to analyze"),
