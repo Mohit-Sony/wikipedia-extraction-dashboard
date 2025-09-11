@@ -20,6 +20,7 @@ from Python_Helper.wiki_extract import extract_wikipedia_page_optimized , APICli
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+fileService = FileService()
 
 @router.post("/extraction/start")
 async def start_extraction(
@@ -261,6 +262,7 @@ async def get_session_logs(
         raise HTTPException(status_code=500, detail="Failed to get session logs")
     
 
+
 async def get_qid_and_type(title: str) -> tuple[Optional[str], Optional[str]]:
     """
     Simple function to get QID and entity type from Wikipedia/Wikidata
@@ -290,6 +292,7 @@ async def get_qid_and_type(title: str) -> tuple[Optional[str], Optional[str]]:
                     return None, None
                 
                 data = await response.json()
+                print(data)
                 
                 if not data or 'query' not in data:
                     logger.warning(f"No query data returned for {title}")
@@ -310,6 +313,14 @@ async def get_qid_and_type(title: str) -> tuple[Optional[str], Optional[str]]:
                 
                 # Extract QID
                 qid = page_info.get("pageprops", {}).get("wikibase_item")
+                short_desc = page_info.get("pageprops", {}).get("wikibase-shortdesc")
+                query = data.get("query", {})
+                redirects = query.get("redirects", [])
+                
+                # Build redirect map: original → resolved
+                redirect_map = {r["from"]: r["to"] for r in redirects}
+                redirect_title = redirect_map.get(title) or title  # only set if it was redirected
+
                 
                 if not qid:
                     logger.warning(f"No QID found for {title}")
@@ -374,7 +385,7 @@ async def get_qid_and_type(title: str) -> tuple[Optional[str], Optional[str]]:
                 async with session.get(wikidata_api_url, params=label_params) as response:
                     if response.status != 200:
                         logger.warning(f"Failed to fetch label for type {type_qid}")
-                        return qid, "entity"
+                        return qid, "entity" , redirect_title , short_desc
                     
                     label_data = await response.json()
                     
@@ -386,11 +397,11 @@ async def get_qid_and_type(title: str) -> tuple[Optional[str], Optional[str]]:
                             # Normalize the label: lowercase and replace spaces with underscores
                             entity_type = label.lower().replace(' ', '_')
                             logger.info(f"Resolved type for {qid}: {entity_type} (from {type_qid}: {label})")
-                            return qid, entity_type
+                            return qid, entity_type , redirect_title , short_desc
                 
                 # If we couldn't get the label, return a generic type
                 logger.warning(f"Could not fetch label for type {type_qid}")
-                return qid, "entity"
+                return qid, "entity", redirect_title , short_desc
                 
         except aiohttp.ClientError as e:
             logger.error(f"Network error resolving '{title}': {e}")
@@ -410,13 +421,13 @@ async def add_manual_entity(
         # Generate QID (you might want to use a different strategy)
         # qid = f"Q{abs(hash(entity_data.title)) % 10000000}"
         # qid = "Q5521008"
-        resolved_qid, resolved_type = await get_qid_and_type(entity_data.title)
+        resolved_qid, resolved_type , resolved_title , short_desc = await get_qid_and_type(entity_data.title)
         
         # Use resolved values or generate manual ones
         if resolved_qid:
             qid = resolved_qid
             entity_type = resolved_type or entity_data.type
-            logger.info(f"Resolved '{entity_data.title}' to QID: {qid}, Type: {entity_type}")
+            logger.info(f"Resolved '{entity_data.title}' to QID: {qid}, Type: {entity_type} , resolved_title:   {resolved_title}, short_desc :  {short_desc}")
         else:
             error_msg = f"Could not resolve entity '{entity_data.title}' from Wikipedia/Wikidata"
             logger.error(error_msg)
@@ -436,11 +447,11 @@ async def add_manual_entity(
         # Create entity
         entity = Entity(
             qid=qid,
-            title=entity_data.title,
+            title= resolved_title or entity_data.title,
             type=entity_type,
-            short_desc=entity_data.short_desc,
+            short_desc=short_desc or "No data - Manual Entry",
             status="unprocessed",
-            file_path=f"manual/{qid}.json",
+            file_path=f"/{qid}.json",
             depth=0
         )
         
