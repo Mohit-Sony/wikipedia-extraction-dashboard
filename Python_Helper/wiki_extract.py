@@ -1703,3 +1703,4 @@ async def extract_wikipedia_page_optimized(page_title: str,
     except Exception as e:
         logger.error(f"Fatal error in extraction: {e}")
         raise
+

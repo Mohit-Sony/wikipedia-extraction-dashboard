@@ -391,6 +391,8 @@ class ExtractionService:
             entity.page_length = extracted_data.get('metadata', {}).get('page_length', 0)
             entity.extraction_date = datetime.utcnow()
             entity.status = EntityStatus.COMPLETED.value
+
+            db.commit()
             
             # Move to completed queue
             self._move_entity_to_queue(db, entity, QueueType.COMPLETED)
@@ -457,7 +459,7 @@ class ExtractionService:
         
         for link in internal_links:
             qid = link.get('qid')
-            title = link.get('title')
+            title = link.get("redirectTitle") or link.get("title")
             
             if not qid or not title:
                 continue

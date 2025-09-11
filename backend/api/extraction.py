@@ -14,6 +14,9 @@ from services.file_service import FileService
 import logging
 import uuid
 from datetime import datetime
+import aiohttp
+from typing import List, Optional, Dict, Any , Union
+from Python_Helper.wiki_extract import extract_wikipedia_page_optimized , APIClient , WikidataAPI
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -256,6 +259,146 @@ async def get_session_logs(
     except Exception as e:
         logger.error(f"Failed to get session logs: {e}")
         raise HTTPException(status_code=500, detail="Failed to get session logs")
+    
+
+async def get_qid_and_type(title: str) -> tuple[Optional[str], Optional[str]]:
+    """
+    Simple function to get QID and entity type from Wikipedia/Wikidata
+    Fetches the actual type label from Wikidata instead of using a mapping
+    Returns: (qid, entity_type) or (None, None) if not found
+    """
+    timeout = aiohttp.ClientTimeout(total=30)
+    headers = {
+        'User-Agent': 'WikipediaExtractor/1.0 (https://example.com/bot)'
+    }
+    
+    async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
+        try:
+            # Step 1: Get QID from Wikipedia API
+            wiki_api_url = "https://en.wikipedia.org/w/api.php"
+            wiki_params = {
+                "action": "query",
+                "titles": title,
+                "prop": "pageprops",
+                "format": "json",
+                "redirects": 1
+            }
+            
+            async with session.get(wiki_api_url, params=wiki_params) as response:
+                if response.status != 200:
+                    logger.warning(f"Wikipedia API returned status {response.status} for {title}")
+                    return None, None
+                
+                data = await response.json()
+                
+                if not data or 'query' not in data:
+                    logger.warning(f"No query data returned for {title}")
+                    return None, None
+                
+                pages = data.get("query", {}).get("pages", {})
+                if not pages:
+                    logger.warning(f"No pages found for {title}")
+                    return None, None
+                
+                # Get the first (and should be only) page
+                page_info = next(iter(pages.values()))
+                
+                # Check if page exists
+                if 'missing' in page_info:
+                    logger.warning(f"Page not found for {title}")
+                    return None, None
+                
+                # Extract QID
+                qid = page_info.get("pageprops", {}).get("wikibase_item")
+                
+                if not qid:
+                    logger.warning(f"No QID found for {title}")
+                    return None, None
+                
+                logger.info(f"Found QID {qid} for {title}")
+            
+            # Step 2: Get entity type from Wikidata - fetch claims
+            wikidata_api_url = "https://www.wikidata.org/w/api.php"
+            wikidata_params = {
+                "action": "wbgetentities",
+                "ids": qid,
+                "props": "claims",
+                "format": "json"
+            }
+            
+            async with session.get(wikidata_api_url, params=wikidata_params) as response:
+                if response.status != 200:
+                    logger.warning(f"Wikidata API returned status {response.status} for {qid}")
+                    return qid, "unknown"
+                
+                data = await response.json()
+                
+                if not data or 'entities' not in data:
+                    logger.warning(f"No entities data from Wikidata for {qid}")
+                    return qid, "unknown"
+                
+                entity = data.get("entities", {}).get(qid, {})
+                
+                if 'missing' in entity:
+                    logger.warning(f"Entity missing in Wikidata for {qid}")
+                    return qid, "unknown"
+                
+                # Get instance_of (P31) claim
+                claims = entity.get("claims", {})
+                instance_of_claims = claims.get("P31", [])
+                
+                if not instance_of_claims:
+                    logger.info(f"No instance_of claims for {qid}")
+                    return qid, "unknown"
+                
+                # Get the first instance_of value
+                first_claim = instance_of_claims[0]
+                mainsnak = first_claim.get("mainsnak", {})
+                datavalue = mainsnak.get("datavalue", {})
+                value = datavalue.get("value", {})
+                type_qid = value.get("id")
+                
+                if not type_qid:
+                    logger.warning(f"No type QID found in claims for {qid}")
+                    return qid, "unknown"
+                
+                # Step 3: Fetch the actual label for the type QID
+                label_params = {
+                    "action": "wbgetentities",
+                    "ids": type_qid,
+                    "props": "labels",
+                    "languages": "en",
+                    "format": "json"
+                }
+                
+                async with session.get(wikidata_api_url, params=label_params) as response:
+                    if response.status != 200:
+                        logger.warning(f"Failed to fetch label for type {type_qid}")
+                        return qid, "entity"
+                    
+                    label_data = await response.json()
+                    
+                    if label_data and "entities" in label_data:
+                        type_entity = label_data["entities"].get(type_qid, {})
+                        label = type_entity.get("labels", {}).get("en", {}).get("value")
+                        
+                        if label:
+                            # Normalize the label: lowercase and replace spaces with underscores
+                            entity_type = label.lower().replace(' ', '_')
+                            logger.info(f"Resolved type for {qid}: {entity_type} (from {type_qid}: {label})")
+                            return qid, entity_type
+                
+                # If we couldn't get the label, return a generic type
+                logger.warning(f"Could not fetch label for type {type_qid}")
+                return qid, "entity"
+                
+        except aiohttp.ClientError as e:
+            logger.error(f"Network error resolving '{title}': {e}")
+            return None, None
+        except Exception as e:
+            logger.error(f"Unexpected error resolving '{title}': {e}")
+            return None, None
+
 
 @router.post("/entities/manual", response_model=ManualEntityResponse)
 async def add_manual_entity(
@@ -265,7 +408,22 @@ async def add_manual_entity(
     """Manually add entity to the system"""
     try:
         # Generate QID (you might want to use a different strategy)
-        qid = f"Q{abs(hash(entity_data.title)) % 10000000}"
+        # qid = f"Q{abs(hash(entity_data.title)) % 10000000}"
+        # qid = "Q5521008"
+        resolved_qid, resolved_type = await get_qid_and_type(entity_data.title)
+        
+        # Use resolved values or generate manual ones
+        if resolved_qid:
+            qid = resolved_qid
+            entity_type = resolved_type or entity_data.type
+            logger.info(f"Resolved '{entity_data.title}' to QID: {qid}, Type: {entity_type}")
+        else:
+            error_msg = f"Could not resolve entity '{entity_data.title}' from Wikipedia/Wikidata"
+            logger.error(error_msg)
+            raise HTTPException(
+                status_code=404,
+                detail=f"{error_msg}. Please verify the entity name and try again."
+            )
         
         # Check if entity already exists
         existing = db.query(Entity).filter(
@@ -279,7 +437,7 @@ async def add_manual_entity(
         entity = Entity(
             qid=qid,
             title=entity_data.title,
-            type=entity_data.type,
+            type=entity_type,
             short_desc=entity_data.short_desc,
             status="unprocessed",
             file_path=f"manual/{qid}.json",
