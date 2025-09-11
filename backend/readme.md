@@ -6,6 +6,7 @@
 - Git (for cloning repository)
 
 ## 1. Environment Setup
+cd backend && python -m venv fresh_venv && source fresh_venv/bin/activate && pip install fastapi uvicorn sqlalchemy pandas "numpy<2.0" python-multipart websockets aiohttp beautifulsoup4 lxml  && python main.py
 
 ### Create Virtual Environment
 ```bash

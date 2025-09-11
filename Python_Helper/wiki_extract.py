@@ -528,6 +528,16 @@ class OptimizedWikipediaExtractor:
                     self.logger.error(f"Chunk extraction error: {e}")
                     data['chunks'] = []
                 
+                # Remove Duplicate links from internal links 
+                # _deduplicate_links_by_qid
+                try:
+                    if data['links'] and data['links']['internal_links'] and len(data['links']['internal_links'])>0 :
+                        deduplicated_links = self._deduplicate_links_by_qid(data['links']['internal_links'])
+                        data['links']['internal_links'] = deduplicated_links
+
+                except Exception as e:
+                    self.logger.error(f"Deduplication Error: {e}")
+
                 # Add entity type if we have QID but no type
                 if data.get('qid') and not data.get('type'):
                     try:
@@ -1483,6 +1493,62 @@ class OptimizedWikipediaExtractor:
             self.logger.warning(f"Error extracting references with spans: {e}")
         return references
 
+
+    def _deduplicate_links_by_qid(self, links: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Deduplicate links by QID, keeping only the final (non-redirected) titles"""
+        try:
+            # Group links by QID
+            qid_groups = {}
+            links_without_qid = []
+            
+            for link in links:
+                qid = link.get("qid")
+                if qid:
+                    if qid not in qid_groups:
+                        qid_groups[qid] = []
+                    qid_groups[qid].append(link)
+                else:
+                    # Keep links without QID as-is
+                    links_without_qid.append(link)
+            
+            # For each QID group, select the best representative
+            deduplicated = []
+            for qid, group_links in qid_groups.items():
+                if len(group_links) == 1:
+                    # Only one link for this QID
+                    deduplicated.append(group_links[0])
+                else:
+                    # Multiple links for same QID - choose the final one
+                    final_link = self._select_final_link(group_links)
+                    deduplicated.append(final_link)
+            
+            # Add back links without QID
+            deduplicated.extend(links_without_qid)
+            
+            self.logger.debug(f"Deduplicated {len(links)} links to {len(deduplicated)} links")
+            return deduplicated
+            
+        except Exception as e:
+            self.logger.error(f"Error deduplicating links: {e}")
+            return links
+
+    def _select_final_link(self, group_links: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Select the final (non-redirected) link from a group of links with same QID"""
+        try:
+            # Prefer links without redirectTitle (these are the final titles)
+            non_redirected = [link for link in group_links if not link.get("redirectTitle")]
+            
+            if non_redirected:
+                # If multiple non-redirected links, prefer the one with longer/more complete title
+                return max(non_redirected, key=lambda x: len(x.get("title", "")))
+            else:
+                # If all are redirected, pick the one with the longest redirectTitle
+                # (this shouldn't normally happen, but just in case)
+                return max(group_links, key=lambda x: len(x.get("redirectTitle", "")))
+                
+        except Exception as e:
+            self.logger.error(f"Error selecting final link: {e}")
+            return group_links[0]  # Fallback to first link
 
     def _split_into_sentences(self, text: str) -> List[str]:
         """Improved sentence splitting"""

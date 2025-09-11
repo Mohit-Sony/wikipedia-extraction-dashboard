@@ -20,7 +20,11 @@ from services.file_service import FileService
 from services.sync_service import SyncService
 from services.extraction_service import extraction_service  # NEW
 
+
+# Ensure logs directory exists
+os.makedirs("../logs", exist_ok=True)
 # Configure logging
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',

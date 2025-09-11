@@ -9,7 +9,7 @@ from utils.schemas import (
     QueueType, EntityStatus
 )
 from services.file_service import FileService
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any , Union
 import logging
 
 logger = logging.getLogger(__name__)
@@ -296,6 +296,18 @@ async def get_entity_preview(qid: str, db: Session = Depends(get_db)):
     return preview_response
 
 
+
+def _convert_infobox_value(value) -> Union[str, int, float, bool]:
+    """Convert infobox values to string/number/boolean as required by frontend interface"""
+    if value is None:
+        return ""
+    elif isinstance(value, bool):
+        return value
+    elif isinstance(value, (int, float)):
+        return value
+    else:
+        # Convert everything else to string
+        return str(value)
 
 def _get_link_type_distribution(internal_links: List[Dict]) -> List[Dict]:
     """Analyze distribution of link types"""
