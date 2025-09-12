@@ -142,6 +142,36 @@ class BatchOperationResult(BaseModel):
     skipped_count: int = 0  # NEW - Smart deduplication skip count
     errors: List[Dict[str, str]]
 
+
+
+# Add this to backend/utils/schemas.py if not already present:
+class BulkReviewOperation(BaseModel):
+    """Schema for bulk review operations (approve/reject specific QIDs)"""
+    operation: str  # 'approve' or 'reject' 
+    qids: List[str]  # List of specific QIDs to process
+    target_queue: Optional[QueueType] = None  # Target queue (for approve operations)
+    priority: Optional[Priority] = None  # Priority to assign
+    notes: Optional[str] = None  # Optional notes
+
+class BulkReviewResult(BaseModel):
+    """Result of bulk review operations"""
+    success_count: int
+    error_count: int  
+    skipped_count: int  # For deduplication skips
+    errors: List[Dict[str, str]]  # List of QID-error pairs
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "success_count": 5,
+                "error_count": 1,
+                "skipped_count": 2,
+                "errors": [
+                    {"qid": "Q123", "error": "Entity not found in review queue"},
+                    {"qid": "Q456", "error": "Skipped: already_completed"}
+                ]
+            }
+        }
 # Extraction Schemas - NEW
 class ExtractionConfig(BaseModel):
     max_depth: int = 3

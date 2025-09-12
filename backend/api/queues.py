@@ -7,12 +7,14 @@ from database.models import Entity, QueueEntry, UserDecision
 from utils.schemas import (
     QueueEntryResponse, QueueEntryCreate, QueueEntryUpdate,
     QueueType, BatchOperation, BatchOperationResult,
-    Priority, EntityResponse
+    Priority, EntityResponse , BulkReviewOperation , BulkReviewResult
 )
 from services.extraction_service import SmartDeduplicationService
 from typing import List, Dict, Any
 import logging
 from datetime import datetime
+from utils.schemas import BatchOperationResult  # For consistent return type
+
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -222,40 +224,90 @@ async def remove_from_queue(entry_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Entity removed from queue"}
 
+# @router.post("/queues/batch", response_model=BatchOperationResult)
+# async def batch_queue_operation(
+#     operation: BatchOperation,
+#     background_tasks: BackgroundTasks,
+#     db: Session = Depends(get_db)
+# ):
+#     """Perform batch operations on multiple entities with smart deduplication"""
+#     results = BatchOperationResult(success_count=0, error_count=0, skipped_count=0, errors=[])
+#     dedup_service = SmartDeduplicationService(db)
+    
+#     for qid in operation.qids:
+#         try:
+#             if operation.operation == "move":
+#                 success, skipped = await _move_entity_to_queue_with_dedup(
+#                     qid, operation.target_queue, operation.priority, operation.notes, db, dedup_service
+#                 )
+#             elif operation.operation == "delete":
+#                 success, skipped = await _remove_entity_from_queue(qid, db)
+#             elif operation.operation == "update_priority":
+#                 success, skipped = await _update_entity_priority(qid, operation.priority, db)
+#             elif operation.operation == "approve_review":  # NEW - Move from REVIEW to ACTIVE
+#                 success, skipped = await _move_entity_to_queue_with_dedup(
+#                     qid, QueueType.ACTIVE, operation.priority, "Approved from review", db, dedup_service
+#                 )
+#             elif operation.operation == "reject_review":  # NEW - Move from REVIEW to REJECTED
+#                 success, skipped = await _move_entity_to_queue_with_dedup(
+#                     qid, QueueType.REJECTED, operation.priority, "Rejected from review", db, dedup_service
+#                 )
+#             else:
+#                 raise ValueError(f"Unknown operation: {operation.operation}")
+            
+#             if skipped:
+#                 results.skipped_count += 1
+#                 results.errors.append({"qid": qid, "error": "Skipped due to deduplication"})
+#             elif success:
+#                 results.success_count += 1
+#             else:
+#                 results.error_count += 1
+#                 results.errors.append({"qid": qid, "error": "Operation failed"})
+                
+#         except Exception as e:
+#             results.error_count += 1
+#             results.errors.append({"qid": qid, "error": str(e)})
+    
+#     db.commit()
+#     return results
+
+# MODIFY the batch_queue_operation function to use new validation
 @router.post("/queues/batch", response_model=BatchOperationResult)
 async def batch_queue_operation(
     operation: BatchOperation,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    """Perform batch operations on multiple entities with smart deduplication"""
+    """FIXED: Perform batch operations with proper validation"""
     results = BatchOperationResult(success_count=0, error_count=0, skipped_count=0, errors=[])
-    dedup_service = SmartDeduplicationService(db)
     
     for qid in operation.qids:
         try:
             if operation.operation == "move":
-                success, skipped = await _move_entity_to_queue_with_dedup(
-                    qid, operation.target_queue, operation.priority, operation.notes, db, dedup_service
+                success, skipped = await _move_entity_to_queue_with_validation(
+                    qid, operation.target_queue, operation.priority, operation.notes, 
+                    db, context="batch_manual"
                 )
             elif operation.operation == "delete":
                 success, skipped = await _remove_entity_from_queue(qid, db)
             elif operation.operation == "update_priority":
                 success, skipped = await _update_entity_priority(qid, operation.priority, db)
-            elif operation.operation == "approve_review":  # NEW - Move from REVIEW to ACTIVE
-                success, skipped = await _move_entity_to_queue_with_dedup(
-                    qid, QueueType.ACTIVE, operation.priority, "Approved from review", db, dedup_service
+            elif operation.operation == "approve_review":
+                success, skipped = await _move_entity_to_queue_with_validation(
+                    qid, QueueType.ACTIVE, operation.priority, "Approved from review", 
+                    db, context="approval"
                 )
-            elif operation.operation == "reject_review":  # NEW - Move from REVIEW to REJECTED
-                success, skipped = await _move_entity_to_queue_with_dedup(
-                    qid, QueueType.REJECTED, operation.priority, "Rejected from review", db, dedup_service
+            elif operation.operation == "reject_review":
+                success, skipped = await _move_entity_to_queue_with_validation(
+                    qid, QueueType.REJECTED, operation.priority, "Rejected from review", 
+                    db, context="approval"
                 )
             else:
                 raise ValueError(f"Unknown operation: {operation.operation}")
             
             if skipped:
                 results.skipped_count += 1
-                results.errors.append({"qid": qid, "error": "Skipped due to deduplication"})
+                results.errors.append({"qid": qid, "error": "Skipped - see logs for reason"})
             elif success:
                 results.success_count += 1
             else:
@@ -269,56 +321,136 @@ async def batch_queue_operation(
     db.commit()
     return results
 
-async def _move_entity_to_queue_with_dedup(
+
+# async def _move_entity_to_queue_with_dedup(
+#     qid: str, 
+#     target_queue: QueueType, 
+#     priority: Priority, 
+#     notes: str, 
+#     db: Session,
+#     dedup_service: SmartDeduplicationService
+# ) -> tuple[bool, bool]:  # (success, skipped)
+#     """Move entity to specified queue with deduplication check"""
+#     try:
+#         # Get entity
+#         entity = db.query(Entity).filter(Entity.qid == qid).first()
+#         if not entity:
+#             return False, False
+        
+#         # Check deduplication only for certain target queues
+#         if target_queue in [QueueType.ACTIVE, QueueType.REVIEW]:
+#             check_result = dedup_service.check_entity_status(qid, entity.title)
+#             if not check_result['should_add']:
+#                 # Log the skip decision
+#                 decision = UserDecision(
+#                     qid=qid,
+#                     decision_type="batch_skip",
+#                     decision_value=check_result['reason'],
+#                     reasoning=f"Skipped batch operation: {check_result['reason']}",
+#                     auto_decision=True
+#                 )
+#                 db.add(decision)
+#                 return False, True  # Skipped
+        
+#         # Get or create queue entry
+#         entry = db.query(QueueEntry).filter(QueueEntry.qid == qid).first()
+        
+#         if entry:
+#             entry.queue_type = target_queue.value
+#             entry.priority = priority.value if priority else entry.priority
+#             entry.notes = notes or entry.notes
+#             entry.added_date = datetime.utcnow()
+#         else:
+#             # Create new entry
+#             entry = QueueEntry(
+#                 qid=qid,
+#                 queue_type=target_queue.value,
+#                 priority=priority.value if priority else Priority.MEDIUM.value,
+#                 notes=notes,
+#                 added_by="batch_operation"
+#             )
+#             db.add(entry)
+        
+#         # Update entity status
+#         if target_queue == QueueType.ACTIVE:
+#             entity.status = "queued"
+#         elif target_queue == QueueType.REJECTED:
+#             entity.status = "rejected"
+#         elif target_queue == QueueType.COMPLETED:
+#             entity.status = "completed"
+#         elif target_queue == QueueType.REVIEW:
+#             entity.status = "unprocessed"
+        
+#         # Log decision
+#         decision = UserDecision(
+#             qid=qid,
+#             decision_type="queue_move",
+#             decision_value=target_queue.value,
+#             reasoning=f"Batch operation: {notes}" if notes else "Batch operation"
+#         )
+#         db.add(decision)
+        
+#         return True, False
+        
+#     except Exception as e:
+#         logger.error(f"Error moving entity {qid} to queue: {e}")
+#         return False, False
+
+async def _move_entity_to_queue_with_validation(
     qid: str, 
     target_queue: QueueType, 
     priority: Priority, 
     notes: str, 
     db: Session,
-    dedup_service: SmartDeduplicationService
+    context: str = "manual"
 ) -> tuple[bool, bool]:  # (success, skipped)
-    """Move entity to specified queue with deduplication check"""
+    """FIXED: Move entity with proper validation instead of broken dedup logic"""
     try:
-        # Get entity
+        # Get entity and current queue
         entity = db.query(Entity).filter(Entity.qid == qid).first()
         if not entity:
+            logger.error(f"Entity {qid} not found")
             return False, False
         
-        # Check deduplication only for certain target queues
-        if target_queue in [QueueType.ACTIVE, QueueType.REVIEW]:
-            check_result = dedup_service.check_entity_status(qid, entity.title)
-            if not check_result['should_add']:
-                # Log the skip decision
-                decision = UserDecision(
-                    qid=qid,
-                    decision_type="batch_skip",
-                    decision_value=check_result['reason'],
-                    reasoning=f"Skipped batch operation: {check_result['reason']}",
-                    auto_decision=True
-                )
-                db.add(decision)
-                return False, True  # Skipped
+        current_entry = db.query(QueueEntry).filter(QueueEntry.qid == qid).first()
+        if not current_entry:
+            logger.error(f"Queue entry for {qid} not found")
+            return False, False
         
-        # Get or create queue entry
-        entry = db.query(QueueEntry).filter(QueueEntry.qid == qid).first()
+        current_queue = QueueType(current_entry.queue_type)
         
-        if entry:
-            entry.queue_type = target_queue.value
-            entry.priority = priority.value if priority else entry.priority
-            entry.notes = notes or entry.notes
-            entry.added_date = datetime.utcnow()
-        else:
-            # Create new entry
-            entry = QueueEntry(
+        # Use validation service instead of broken dedup logic
+        validation_service = QueueValidationService()
+        validation = validation_service.validate_movement(
+            from_queue=current_queue,
+            to_queue=target_queue,
+            context=context
+        )
+        
+        if not validation.allowed:
+            logger.warning(f"Move blocked for {qid}: {validation.reason}")
+            # Log the block decision
+            decision = UserDecision(
                 qid=qid,
-                queue_type=target_queue.value,
-                priority=priority.value if priority else Priority.MEDIUM.value,
-                notes=notes,
-                added_by="batch_operation"
+                decision_type="move_blocked",
+                decision_value=validation.reason,
+                reasoning=f"Move from {current_queue.value} to {target_queue.value} blocked: {validation.reason}",
+                auto_decision=True
             )
-            db.add(entry)
+            db.add(decision)
+            return False, True  # Blocked/Skipped
         
-        # Update entity status
+        if validation.is_redundant:
+            logger.info(f"Redundant move for {qid}: already in {target_queue.value}")
+            return True, True  # Success but skipped
+        
+        # Perform the move
+        current_entry.queue_type = target_queue.value
+        current_entry.priority = priority.value if priority else current_entry.priority
+        current_entry.notes = notes or current_entry.notes
+        current_entry.added_date = datetime.utcnow()
+        
+        # Update entity status based on target queue
         if target_queue == QueueType.ACTIVE:
             entity.status = "queued"
         elif target_queue == QueueType.REJECTED:
@@ -327,21 +459,29 @@ async def _move_entity_to_queue_with_dedup(
             entity.status = "completed"
         elif target_queue == QueueType.REVIEW:
             entity.status = "unprocessed"
+        elif target_queue == QueueType.FAILED:
+            entity.status = "failed"
+        elif target_queue == QueueType.ON_HOLD:
+            entity.status = "on_hold"
+        elif target_queue == QueueType.PROCESSING:
+            entity.status = "processing"
         
         # Log decision
         decision = UserDecision(
             qid=qid,
             decision_type="queue_move",
             decision_value=target_queue.value,
-            reasoning=f"Batch operation: {notes}" if notes else "Batch operation"
+            reasoning=f"Moved from {current_queue.value} to {target_queue.value}: {notes or 'No notes'}"
         )
         db.add(decision)
         
-        return True, False
+        return True, False  # Success, not skipped
         
     except Exception as e:
-        logger.error(f"Error moving entity {qid} to queue: {e}")
+        logger.error(f"Error moving entity {qid} to queue {target_queue.value}: {e}")
         return False, False
+
+
 
 async def _remove_entity_from_queue(qid: str, db: Session) -> tuple[bool, bool]:
     """Remove entity from all queues"""
@@ -451,128 +591,375 @@ async def get_review_queue_sources(db: Session = Depends(get_db)):
         ]
     }
 
-@router.post("/queues/review/bulk-approve")
+# @router.post("/queues/review/bulk-approve", response_model=BatchOperationResult)
+# async def bulk_approve_review_entities(
+#     operation: BulkReviewOperation,  # Accept request body with QID list
+#     db: Session = Depends(get_db)
+# ):
+#     """Bulk approve specific entities from review queue by QID list"""
+#     try:
+#         if not operation.qids:
+#             return BatchOperationResult(
+#                 success_count=0,
+#                 error_count=0,
+#                 skipped_count=0,
+#                 errors=[{"qid": "none", "error": "No QIDs provided"}]
+#             )
+        
+#         results = BatchOperationResult(
+#             success_count=0,
+#             error_count=0,
+#             skipped_count=0,
+#             errors=[]
+#         )
+        
+#         dedup_service = SmartDeduplicationService(db)
+        
+#         for qid in operation.qids:
+#             try:
+#                 # Get the queue entry for this specific QID in review queue
+#                 entry = db.query(QueueEntry).join(Entity).filter(
+#                     QueueEntry.qid == qid,
+#                     QueueEntry.queue_type == QueueType.REVIEW.value
+#                 ).first()
+                
+#                 if not entry:
+#                     results.error_count += 1
+#                     results.errors.append({
+#                         "qid": qid,
+#                         "error": "Entity not found in review queue"
+#                     })
+#                     continue
+                
+#                 # Check deduplication to ensure it's still valid to approve
+#                 check_result = dedup_service.check_entity_status(entry.qid, entry.entity.title)
+                
+#                 if not check_result['should_add']:
+#                     # Entity is already processed/duplicate - skip it
+#                     results.skipped_count += 1
+#                     results.errors.append({
+#                         "qid": qid,
+#                         "error": f"Skipped: {check_result['reason']} (status: {check_result['existing_status']})"
+#                     })
+#                     continue
+                
+#                 # Move from REVIEW to ACTIVE queue
+#                 entry.queue_type = QueueType.ACTIVE.value
+#                 entry.entity.status = "queued"
+#                 entry.added_date = datetime.utcnow()
+#                 entry.notes = f"Bulk approved from review queue"
+#                 entry.priority = operation.priority.value if operation.priority else entry.priority
+                
+#                 # Log the decision
+#                 decision = UserDecision(
+#                     qid=entry.qid,
+#                     decision_type="bulk_approve",
+#                     decision_value="moved_to_active",
+#                     reasoning=f"Bulk approved from review queue - user selected QID: {qid}"
+#                 )
+#                 db.add(decision)
+                
+#                 results.success_count += 1
+                
+#             except Exception as entity_error:
+#                 results.error_count += 1
+#                 results.errors.append({
+#                     "qid": qid,
+#                     "error": f"Processing failed: {str(entity_error)}"
+#                 })
+#                 logger.error(f"Error processing QID {qid} in bulk approve: {entity_error}")
+        
+#         # Commit all successful operations
+#         db.commit()
+        
+#         logger.info(f"Bulk approve completed: {results.success_count} approved, "
+#                    f"{results.error_count} errors, {results.skipped_count} skipped")
+        
+#         return results
+        
+#     except Exception as e:
+#         db.rollback()
+#         logger.error(f"Bulk approve failed completely: {e}")
+#         raise HTTPException(status_code=500, detail=f"Bulk approve operation failed: {str(e)}")
+
+
+# @router.post("/queues/review/bulk-reject", response_model=BatchOperationResult) 
+# async def bulk_reject_review_entities(
+#     operation: BulkReviewOperation,  # Also fix bulk-reject for consistency
+#     db: Session = Depends(get_db)
+# ):
+#     """Bulk reject specific entities from review queue by QID list"""
+#     try:
+#         if not operation.qids:
+#             return BatchOperationResult(
+#                 success_count=0,
+#                 error_count=0,
+#                 skipped_count=0,
+#                 errors=[{"qid": "none", "error": "No QIDs provided"}]
+#             )
+        
+#         results = BatchOperationResult(
+#             success_count=0,
+#             error_count=0,
+#             skipped_count=0,
+#             errors=[]
+#         )
+        
+#         for qid in operation.qids:
+#             try:
+#                 # Get the queue entry for this specific QID in review queue
+#                 entry = db.query(QueueEntry).join(Entity).filter(
+#                     QueueEntry.qid == qid,
+#                     QueueEntry.queue_type == QueueType.REVIEW.value
+#                 ).first()
+                
+#                 if not entry:
+#                     results.error_count += 1
+#                     results.errors.append({
+#                         "qid": qid,
+#                         "error": "Entity not found in review queue"
+#                     })
+#                     continue
+                
+#                 # Move from REVIEW to REJECTED queue
+#                 entry.queue_type = QueueType.REJECTED.value
+#                 entry.entity.status = "rejected"
+#                 entry.added_date = datetime.utcnow()
+#                 entry.notes = f"Bulk rejected from review queue"
+#                 entry.priority = operation.priority.value if operation.priority else entry.priority
+                
+#                 # Log the decision
+#                 decision = UserDecision(
+#                     qid=entry.qid,
+#                     decision_type="bulk_reject",
+#                     decision_value="moved_to_rejected",
+#                     reasoning=f"Bulk rejected from review queue - user selected QID: {qid}"
+#                 )
+#                 db.add(decision)
+                
+#                 results.success_count += 1
+                
+#             except Exception as entity_error:
+#                 results.error_count += 1
+#                 results.errors.append({
+#                     "qid": qid,
+#                     "error": f"Processing failed: {str(entity_error)}"
+#                 })
+#                 logger.error(f"Error processing QID {qid} in bulk reject: {entity_error}")
+        
+#         # Commit all successful operations
+#         db.commit()
+        
+#         logger.info(f"Bulk reject completed: {results.success_count} rejected, "
+#                    f"{results.error_count} errors, {results.skipped_count} skipped")
+        
+#         return results
+        
+#     except Exception as e:
+#         db.rollback()
+#         logger.error(f"Bulk reject failed completely: {e}")
+#         raise HTTPException(status_code=500, detail=f"Bulk reject operation failed: {str(e)}")
+
+  
+
+from services.queue_validation_service import QueueValidationService, ValidationResult
+
+# Replace the broken bulk_approve_review_entities function
+@router.post("/queues/review/bulk-approve", response_model=BatchOperationResult)
 async def bulk_approve_review_entities(
-    source_qid: str = None,
-    entity_type: str = None,
-    limit: int = None,
+    operation: BulkReviewOperation,
     db: Session = Depends(get_db)
 ):
-    """Bulk approve entities from review queue based on criteria"""
+    """FIXED: Bulk approve specific entities from review queue by QID list"""
     try:
-        # Build query for entities to approve
-        query = db.query(QueueEntry).join(Entity).filter(
-            QueueEntry.queue_type == QueueType.REVIEW.value
+        if not operation.qids:
+            return BatchOperationResult(
+                success_count=0,
+                error_count=0,
+                skipped_count=0,
+                errors=[{"qid": "none", "error": "No QIDs provided"}]
+            )
+        
+        results = BatchOperationResult(
+            success_count=0,
+            error_count=0,
+            skipped_count=0,
+            errors=[]
         )
         
-        if source_qid:
-            query = query.filter(QueueEntry.discovery_source == source_qid)
+        # Use validation service instead of broken dedup logic
+        validation_service = QueueValidationService()
         
-        if entity_type:
-            query = query.filter(Entity.type == entity_type)
-        
-        if limit:
-            query = query.limit(limit)
-        
-        entries_to_approve = query.all()
-        
-        if not entries_to_approve:
-            return {"message": "No entities found matching criteria", "approved_count": 0}
-        
-        # Move to active queue
-        approved_count = 0
-        dedup_service = SmartDeduplicationService(db)
-        
-        for entry in entries_to_approve:
-            # Check deduplication
-            check_result = dedup_service.check_entity_status(entry.qid, entry.entity.title)
-            
-            if check_result['should_add']:
+        for qid in operation.qids:
+            try:
+                # Get the queue entry for this specific QID in review queue
+                entry = db.query(QueueEntry).join(Entity).filter(
+                    QueueEntry.qid == qid,
+                    QueueEntry.queue_type == QueueType.REVIEW.value
+                ).first()
+                
+                if not entry:
+                    results.error_count += 1
+                    results.errors.append({
+                        "qid": qid,
+                        "error": "Entity not found in review queue"
+                    })
+                    continue
+                
+                # FIXED: Use proper validation instead of broken dedup logic
+                validation = validation_service.validate_movement(
+                    from_queue=QueueType.REVIEW,
+                    to_queue=QueueType.ACTIVE,
+                    context="approval"
+                )
+                
+                if not validation.allowed:
+                    results.error_count += 1
+                    results.errors.append({
+                        "qid": qid,
+                        "error": f"Move not allowed: {validation.reason}"
+                    })
+                    continue
+                
+                if validation.is_redundant:
+                    results.skipped_count += 1
+                    results.errors.append({
+                        "qid": qid,
+                        "error": "Already in active queue"
+                    })
+                    continue
+                
+                # Perform the move: REVIEW → ACTIVE
                 entry.queue_type = QueueType.ACTIVE.value
                 entry.entity.status = "queued"
                 entry.added_date = datetime.utcnow()
                 entry.notes = f"Bulk approved from review queue"
+                entry.priority = operation.priority.value if operation.priority else entry.priority
                 
-                # Log decision
+                # Log the decision
                 decision = UserDecision(
                     qid=entry.qid,
                     decision_type="bulk_approve",
                     decision_value="moved_to_active",
-                    reasoning=f"Bulk approved from review queue (source: {source_qid}, type: {entity_type})"
+                    reasoning=f"User approved entity from review queue"
                 )
                 db.add(decision)
                 
-                approved_count += 1
+                results.success_count += 1
+                
+            except Exception as entity_error:
+                results.error_count += 1
+                results.errors.append({
+                    "qid": qid,
+                    "error": f"Processing failed: {str(entity_error)}"
+                })
+                logger.error(f"Error processing QID {qid} in bulk approve: {entity_error}")
         
+        # Commit all successful operations
         db.commit()
         
-        return {
-            "message": f"Bulk approval completed",
-            "approved_count": approved_count,
-            "total_found": len(entries_to_approve),
-            "skipped_duplicates": len(entries_to_approve) - approved_count
-        }
+        logger.info(f"Bulk approve completed: {results.success_count} approved, "
+                   f"{results.error_count} errors, {results.skipped_count} skipped")
+        
+        return results
         
     except Exception as e:
-        logger.error(f"Bulk approve failed: {e}")
-        raise HTTPException(status_code=500, detail="Bulk approve operation failed")
+        db.rollback()
+        logger.error(f"Bulk approve failed completely: {e}")
+        raise HTTPException(status_code=500, detail=f"Bulk approve operation failed: {str(e)}")
 
-@router.post("/queues/review/bulk-reject")
+
+@router.post("/queues/review/bulk-reject", response_model=BatchOperationResult)
 async def bulk_reject_review_entities(
-    source_qid: str = None,
-    entity_type: str = None,
-    limit: int = None,
+    operation: BulkReviewOperation,
     db: Session = Depends(get_db)
 ):
-    """Bulk reject entities from review queue based on criteria"""
+    """FIXED: Bulk reject specific entities from review queue by QID list"""
     try:
-        # Build query for entities to reject
-        query = db.query(QueueEntry).join(Entity).filter(
-            QueueEntry.queue_type == QueueType.REVIEW.value
+        if not operation.qids:
+            return BatchOperationResult(
+                success_count=0,
+                error_count=0,
+                skipped_count=0,
+                errors=[{"qid": "none", "error": "No QIDs provided"}]
+            )
+        
+        results = BatchOperationResult(
+            success_count=0,
+            error_count=0,
+            skipped_count=0,
+            errors=[]
         )
         
-        if source_qid:
-            query = query.filter(QueueEntry.discovery_source == source_qid)
+        validation_service = QueueValidationService()
         
-        if entity_type:
-            query = query.filter(Entity.type == entity_type)
+        for qid in operation.qids:
+            try:
+                # Get the queue entry for this specific QID in review queue
+                entry = db.query(QueueEntry).join(Entity).filter(
+                    QueueEntry.qid == qid,
+                    QueueEntry.queue_type == QueueType.REVIEW.value
+                ).first()
+                
+                if not entry:
+                    results.error_count += 1
+                    results.errors.append({
+                        "qid": qid,
+                        "error": "Entity not found in review queue"
+                    })
+                    continue
+                
+                # FIXED: Use proper validation
+                validation = validation_service.validate_movement(
+                    from_queue=QueueType.REVIEW,
+                    to_queue=QueueType.REJECTED,
+                    context="approval"
+                )
+                
+                if not validation.allowed:
+                    results.error_count += 1
+                    results.errors.append({
+                        "qid": qid,
+                        "error": f"Move not allowed: {validation.reason}"
+                    })
+                    continue
+                
+                # Perform the move: REVIEW → REJECTED
+                entry.queue_type = QueueType.REJECTED.value
+                entry.entity.status = "rejected"
+                entry.added_date = datetime.utcnow()
+                entry.notes = f"Bulk rejected from review queue"
+                
+                # Log the decision
+                decision = UserDecision(
+                    qid=entry.qid,
+                    decision_type="bulk_reject",
+                    decision_value="moved_to_rejected",
+                    reasoning=f"User rejected entity from review queue"
+                )
+                db.add(decision)
+                
+                results.success_count += 1
+                
+            except Exception as entity_error:
+                results.error_count += 1
+                results.errors.append({
+                    "qid": qid,
+                    "error": f"Processing failed: {str(entity_error)}"
+                })
+                logger.error(f"Error processing QID {qid} in bulk reject: {entity_error}")
         
-        if limit:
-            query = query.limit(limit)
-        
-        entries_to_reject = query.all()
-        
-        if not entries_to_reject:
-            return {"message": "No entities found matching criteria", "rejected_count": 0}
-        
-        # Move to rejected queue
-        rejected_count = 0
-        
-        for entry in entries_to_reject:
-            entry.queue_type = QueueType.REJECTED.value
-            entry.entity.status = "rejected"
-            entry.added_date = datetime.utcnow()
-            entry.notes = f"Bulk rejected from review queue"
-            
-            # Log decision
-            decision = UserDecision(
-                qid=entry.qid,
-                decision_type="bulk_reject",
-                decision_value="moved_to_rejected",
-                reasoning=f"Bulk rejected from review queue (source: {source_qid}, type: {entity_type})"
-            )
-            db.add(decision)
-            
-            rejected_count += 1
-        
+        # Commit all successful operations
         db.commit()
         
-        return {
-            "message": f"Bulk rejection completed",
-            "rejected_count": rejected_count,
-            "total_found": len(entries_to_reject)
-        }
+        logger.info(f"Bulk reject completed: {results.success_count} rejected, "
+                   f"{results.error_count} errors")
+        
+        return results
         
     except Exception as e:
-        logger.error(f"Bulk reject failed: {e}")
-        raise HTTPException(status_code=500, detail="Bulk reject operation failed")
+        db.rollback()
+        logger.error(f"Bulk reject failed completely: {e}")
+        raise HTTPException(status_code=500, detail=f"Bulk reject operation failed: {str(e)}")
+
+
