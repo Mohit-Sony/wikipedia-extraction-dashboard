@@ -349,12 +349,171 @@ class ExtractionService:
             logger.error(f"Extraction failed: {e}")
             await self._complete_extraction(db, "failed")
 
+
+    def print_entity_debug_info(self ,entity, label="Entity"):
+        """Helper function to print meaningful entity information"""
+        if entity:
+            print(f"\n=== {label} ===")
+            print(f"QID: {entity.qid}")
+            print(f"Title: {entity.title}")
+            print(f"Type: {entity.type}")
+            print(f"Status: {entity.status}")
+            print(f"Links: {entity.num_links}")
+            print(f"Tables: {entity.num_tables}")
+            print(f"Images: {entity.num_images}")
+            print(f"Chunks: {entity.num_chunks}")
+            print(f"Page Length: {entity.page_length}")
+            print(f"Extraction Date: {entity.extraction_date}")
+            print(f"File Path: {entity.file_path}")
+            print(f"Created At: {entity.created_at}")
+            print(f"Updated At: {entity.updated_at}")
+        else:
+            print(f"\n=== {label} ===")
+            print("Entity is None!")
+
+    def print_dirty_objects_details(self, db, label="Dirty Objects"):
+        """Print detailed information about dirty objects in session - FIXED VERSION"""
+        print(f"\n=== {label} ===")
+        if db.dirty:
+            print(f"Count: {len(db.dirty)}")
+            for i, obj in enumerate(db.dirty):
+                print(f"\n  Dirty Object #{i+1}:")
+                print(f"    Type: {type(obj).__name__}")
+                
+                if hasattr(obj, 'qid'):
+                    print(f"    QID: {obj.qid}")
+                if hasattr(obj, 'title'):
+                    print(f"    Title: {obj.title}")
+                if hasattr(obj, 'queue_type'):
+                    print(f"    Queue Type: {obj.queue_type}")
+                if hasattr(obj, 'status'):
+                    print(f"    Status: {obj.status}")
+                if hasattr(obj, 'num_links'):
+                    print(f"    Links: {obj.num_links}")
+                    
+                # FIXED: Show what changed (SQLAlchemy history tracking)
+                from sqlalchemy import inspect
+                state = inspect(obj)
+                
+                try:
+                    # Check if modified is a boolean or collection
+                    if hasattr(state, 'modified'):
+                        modified_attrs = state.modified
+                        
+                        # Handle different return types
+                        if isinstance(modified_attrs, bool):
+                            if modified_attrs:
+                                print(f"    Has Changes: Yes (boolean response)")
+                                # Try to get actual changed attributes through history
+                                print(f"    Checking individual attributes...")
+                                for attr_name in ['qid', 'title', 'status', 'num_links', 'num_tables', 'num_images', 'num_chunks', 'page_length', 'extraction_date', 'type']:
+                                    if hasattr(obj, attr_name) and hasattr(state.attrs, attr_name):
+                                        try:
+                                            history = state.attrs[attr_name].history
+                                            if history.has_changes():
+                                                print(f"      {attr_name}: CHANGED")
+                                        except:
+                                            pass
+                            else:
+                                print(f"    Has Changes: No")
+                        
+                        elif modified_attrs:  # It's a collection/set
+                            print(f"    Modified Attributes: {list(modified_attrs)}")
+                            for attr in modified_attrs:
+                                try:
+                                    history = state.attrs[attr].history
+                                    if history.has_changes():
+                                        old_val = history.deleted[0] if history.deleted else None
+                                        new_val = history.added[0] if history.added else None
+                                        print(f"      {attr}: {old_val} -> {new_val}")
+                                except Exception as hist_error:
+                                    print(f"      {attr}: (history error: {hist_error})")
+                        else:
+                            print(f"    Modified Attributes: None")
+                            
+                    else:
+                        print(f"    Modified Attributes: Not available")
+                        
+                except Exception as debug_error:
+                    print(f"    Debug Error: {debug_error}")
+                    print(f"    State type: {type(state)}")
+                    print(f"    State dir: {[attr for attr in dir(state) if not attr.startswith('_')]}")
+                    
+        else:
+            print("No dirty objects")
+
+    # ALTERNATIVE SIMPLER VERSION (if the above is too complex):
+    def print_dirty_objects_simple(self, db, label="Dirty Objects"):
+        """Simplified version that avoids the iteration error"""
+        print(f"\n=== {label} ===")
+        if db.dirty:
+            print(f"Count: {len(db.dirty)}")
+            for i, obj in enumerate(db.dirty):
+                print(f"\n  Dirty Object #{i+1}:")
+                print(f"    Type: {type(obj).__name__}")
+                
+                if hasattr(obj, 'qid'):
+                    print(f"    QID: {obj.qid}")
+                if hasattr(obj, 'title'):
+                    print(f"    Title: {obj.title}")
+                if hasattr(obj, 'status'):
+                    print(f"    Status: {obj.status}")
+                if hasattr(obj, 'num_links'):
+                    print(f"    Links: {obj.num_links}")
+                
+                # SAFE: Just show that it's modified without details
+                from sqlalchemy import inspect
+                state = inspect(obj)
+                print(f"    Is Modified: {bool(state.modified) if hasattr(state, 'modified') else 'Unknown'}")
+                
+        else:
+            print("No dirty objects")
+
     async def _extract_single_entity(self, db: Session, entity: Entity, config: ExtractionConfig) -> bool:
-        """Extract a single entity and process its links"""
+        """Extract a single entity and process its links - DEEPLY FIXED VERSION"""
         entity_qid = entity.qid  # Store QID for safe reference
         entity_title = entity.title  # Store title for safe reference
         
+        # === BEFORE CHANGES DEBUG ===
+        print(f"\n{'='*60}")
+        print(f"STARTING EXTRACTION FOR: {entity_qid} - {entity_title}")
+        print(f"{'='*60}")
+        
+        # self.print_entity_debug_info(entity, "ORIGINAL ENTITY (Potentially Detached)")
+        #self.print_dirty_objects_details(db, "DIRTY OBJECTS BEFORE RE-QUERY")
+        
         try:
+            # === CRITICAL FIX 1: Fresh Entity Query ===
+            print(f"\n{'='*50}")
+            print(f"GETTING FRESH ENTITY FROM DATABASE")
+            print(f"{'='*50}")
+            
+            fresh_entity = db.query(Entity).filter(Entity.qid == entity_qid).first()
+            if not fresh_entity:
+                logger.error(f"Entity {entity_qid} not found in database")
+                return False
+            
+            # Replace the potentially detached entity with fresh one
+            entity = fresh_entity
+            
+            # === CRITICAL FIX 2: Verify Session Attachment ===
+            from sqlalchemy import inspect
+            entity_state = inspect(entity)
+            print(f"\n=== ENTITY SESSION STATE CHECK ===")
+            print(f"Entity in session: {entity in db}")
+            print(f"Entity session: {entity_state.session}")
+            print(f"Current session: {db}")
+            print(f"Entity detached: {entity_state.detached}")
+            print(f"Entity persistent: {entity_state.persistent}")
+            
+            if entity_state.detached:
+                print("⚠️ Entity is detached! Re-attaching...")
+                db.add(entity)
+                db.flush()  # Force attachment without commit
+            
+            # self.print_entity_debug_info(entity, "FRESH ENTITY AFTER SESSION CHECK")
+            #self.print_dirty_objects_details(db, "DIRTY OBJECTS AFTER FRESH QUERY")
+
             # Log extraction start
             self._log_extraction_event(db, "started", entity_qid, {"title": entity_title})
             
@@ -365,86 +524,199 @@ class ExtractionService:
                 self._log_extraction_event(db, "failed", entity_qid, {"error": "No data returned"})
                 entity.status = EntityStatus.FAILED.value
                 self._move_entity_to_queue(db, entity, QueueType.FAILED)
+                db.commit()
                 return False
             
-            # Save extracted data (implement this based on your file service)
+            # Save extracted data to file system
             from services.file_service import FileService
             file_service = FileService()
             
-            # Determine entity type from extracted data or default to 'unknown'
             entity_type = str(extracted_data.get('type', 'unknown')).replace(' ', '_').replace('/', '_')
-            
-            # Save to file system
             file_saved = file_service.save_entity_data(entity_qid, entity_type, extracted_data)
             
             if not file_saved:
                 logger.warning(f"Failed to save file for entity {entity_qid}, but continuing with database update")
-                # Don't fail the entire extraction, just log the issue
-            
 
-            # Update entity with extracted metadata
-            entity.entity_type = entity_type  # Update entity type from extracted data
+            # === CRITICAL FIX 3: Verify Entity is Tracked Before Changes ===
+            print(f"\n{'='*50}")
+            print(f"MAKING CHANGES TO ENTITY")
+            print(f"{'='*50}")
+            
+            # Test tracking BEFORE making changes
+            test_change = entity.updated_at  # Read current value
+            entity.updated_at = datetime.now()  # Make test change
+            
+            print(f"After test change - Entity in dirty set: {entity in db.dirty}")
+            if entity not in db.dirty:
+                print("🚨 CRITICAL: Entity changes not being tracked!")
+                print("Attempting to force tracking...")
+                db.add(entity)  # Force re-attachment
+                entity.updated_at = datetime.now()  # Make change again
+                print(f"After force re-attach - Entity in dirty set: {entity in db.dirty}")
+            else:
+                print("✅ Entity changes are being tracked")
+            
+            # Store old values for comparison
+            old_values = {
+                'num_links': entity.num_links,
+                'num_tables': entity.num_tables,
+                'num_images': entity.num_images,
+                'num_chunks': entity.num_chunks,
+                'page_length': entity.page_length,
+                'status': entity.status
+            }
+            
+            # === MAKE ACTUAL CHANGES ===
+            entity.type = entity_type
             entity.num_links = len(extracted_data.get('links', {}).get('internal_links', []))
             entity.num_tables = len(extracted_data.get('tables', []))
             entity.num_images = len(extracted_data.get('images', []))
             entity.num_chunks = len(extracted_data.get('chunks', []))
             entity.page_length = extracted_data.get('metadata', {}).get('page_length', 0)
-            entity.extraction_date = datetime.utcnow()
+            entity.extraction_date = datetime.now()
             entity.status = EntityStatus.COMPLETED.value
-
-            db.commit()
             
-            # Move to completed queue
+            # Print what changed
+            new_values = {
+                'num_links': entity.num_links,
+                'num_tables': entity.num_tables,
+                'num_images': entity.num_images,
+                'num_chunks': entity.num_chunks,
+                'page_length': entity.page_length,
+                'status': entity.status
+            }
+            
+            print("\n=== CHANGES MADE ===")
+            for key in old_values:
+                if old_values[key] != new_values[key]:
+                    print(f"  {key}: {old_values[key]} -> {new_values[key]}")
+
+            print(f'Entity changes after metadata update: {entity.num_tables}, {entity.status}')
+
+            # === CRITICAL FIX 4: Verify Changes Are Tracked ===
+            # self.print_entity_debug_info(entity, "ENTITY AFTER CHANGES")
+            #self.print_dirty_objects_details(db, "DIRTY OBJECTS AFTER CHANGES")
+            
+            print(f"Entity in dirty set after changes: {entity in db.dirty}")
+            if entity not in db.dirty:
+                print("🚨 PANIC: Entity changes STILL not tracked!")
+                return False
+
+            # === CRITICAL FIX 5: Separate Queue Operations ===
+            print(f"\n{'='*50}")
+            print(f"UPDATING QUEUE STATUS")
+            print(f"{'='*50}")
+            
+            # Move to completed queue (this creates/modifies QueueEntry)
             self._move_entity_to_queue(db, entity, QueueType.COMPLETED)
             
-            # Process discovered links with smart deduplication
+            print(f"Dirty objects after queue move: {len(db.dirty)}")
+            #self.print_dirty_objects_details(db, "DIRTY OBJECTS AFTER QUEUE MOVE")
+
+            # === COMMIT CHANGES ===
+            print(f"\n{'='*50}")
+            print(f"COMMITTING CHANGES TO DATABASE")
+            print(f"{'='*50}")
+            
+            try:
+                print(f"Dirty objects before commit: {db.dirty}")
+                
+                # Force flush before commit to see what happens
+                db.flush()
+                print("✅ Flush successful")
+                
+                db.commit()
+                logger.info(f"Committed extraction metadata for entity {entity_qid}")
+                print("✅ COMMIT SUCCESSFUL")
+                
+            except Exception as commit_error:
+                logger.error(f"Failed to commit extraction metadata for {entity_qid}: {commit_error}")
+                print(f"❌ COMMIT FAILED: {commit_error}")
+                db.rollback()
+                return False
+
+            print(f"Dirty objects after commit: {db.dirty}")
+
+            # === VERIFICATION ===
+            # self.print_entity_debug_info(entity, "ENTITY AFTER COMMIT (Local Object)")
+            #self.print_dirty_objects_details(db, "DIRTY OBJECTS AFTER COMMIT")
+            
+            # === FRESH ENTITY FROM DATABASE ===
+            print(f"\n{'='*50}")
+            print(f"FETCHING FRESH ENTITY FROM DATABASE FOR VERIFICATION")
+            print(f"{'='*50}")
+            
+            verification_entity = db.query(Entity).filter(Entity.qid == entity_qid).first()
+            # self.print_entity_debug_info(verification_entity, "VERIFICATION ENTITY FROM DATABASE")
+            
+            # Compare local vs fresh
+            print(f"\n=== LOCAL VS FRESH COMPARISON ===")
+            if verification_entity:
+                fields_to_compare = ['num_links', 'num_tables', 'num_images', 'num_chunks', 'page_length', 'status']
+                all_match = True
+                for field in fields_to_compare:
+                    local_val = getattr(entity, field)
+                    fresh_val = getattr(verification_entity, field)
+                    match_status = "✅ MATCH" if local_val == fresh_val else "❌ MISMATCH"
+                    if local_val != fresh_val:
+                        all_match = False
+                    print(f"  {field}: Local={local_val}, Fresh={fresh_val} {match_status}")
+                
+                if not all_match:
+                    print("🚨 DATA PERSISTENCE FAILURE DETECTED!")
+                    return False
+                else:
+                    print("✅ ALL DATA SUCCESSFULLY PERSISTED!")
+            
+            # Process discovered links (separate transaction)
             if config.auto_add_to_review:
                 await self._process_discovered_links(db, entity, extracted_data)
             
-            # After processing links, refresh entity from database in case of rollbacks
+            # Final session state check
             try:
-                db.refresh(entity)
-            except Exception as refresh_error:
-                # If refresh fails, re-query the entity
-                logger.warning(f"Could not refresh entity {entity_qid}, re-querying: {refresh_error}")
+                _ = entity.id
+                print("✅ Entity still bound to session after link processing")
+            except Exception as detached_error:
+                print(f"⚠️ Entity detached during link processing: {detached_error}")
                 entity = db.query(Entity).filter(Entity.qid == entity_qid).first()
                 if not entity:
                     logger.error(f"Entity {entity_qid} not found after re-query")
                     return False
             
-            # Log completion with safely accessed attributes
+            # Log completion
             self._log_extraction_event(db, "completed", entity_qid, {
                 "num_links": entity.num_links,
                 "num_tables": entity.num_tables,
                 "num_images": entity.num_images,
-                "page_length": entity.page_length
+                "page_length": entity.page_length,
+                "file_saved": file_saved
             })
+            
+            print(f"\n{'='*60}")
+            print(f"EXTRACTION COMPLETED SUCCESSFULLY FOR: {entity_qid}")
+            print(f"{'='*60}\n")
             
             return True
             
         except Exception as e:
+            print(f"\n❌ EXTRACTION FAILED FOR {entity_qid}: {e}")
             try:
-                db.rollback()  # Rollback the failed transaction
+                db.rollback()
                 logger.error(f"Failed to extract entity {entity_qid}: {e}")
                 self._log_extraction_event(db, "failed", entity_qid, {"error": str(e)})
                 
-                # Re-query entity after rollback to ensure it's bound to session
+                # Get fresh entity for failure handling
                 entity = db.query(Entity).filter(Entity.qid == entity_qid).first()
                 if entity:
                     entity.status = EntityStatus.FAILED.value
                     self._move_entity_to_queue(db, entity, QueueType.FAILED)
-                    db.commit()  # Commit the status change
-                else:
-                    logger.error(f"Could not find entity {entity_qid} to update status")
+                    db.commit()
                     
             except Exception as rollback_error:
                 logger.error(f"Error during rollback for entity {entity_qid}: {rollback_error}")
-                try:
-                    db.rollback()  # Final attempt to clean state
-                except:
-                    pass
+                
             return False
-        
+            
     async def _process_discovered_links(self, db: Session, parent_entity: Entity, extracted_data: Dict):
         """Process discovered links with smart deduplication"""
         internal_links = extracted_data.get('links', {}).get('internal_links', [])

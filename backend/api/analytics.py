@@ -279,17 +279,18 @@ async def get_user_decision_patterns(
     }
 
 
+
 @router.get("/analytics/content-quality")
 async def get_content_quality_metrics(db: Session = Depends(get_db)):
     """Analyze content quality metrics"""
     # Distribution of page lengths
     page_length_dist = db.query(
-        case(
+        case([
             (Entity.page_length < 1000, 'Very Short'),
             (Entity.page_length < 5000, 'Short'),
             (Entity.page_length < 20000, 'Medium'),
             (Entity.page_length < 50000, 'Long'),
-            else_='Very Long'
+        ], else_='Very Long'
         ).label('length_category'),
         func.count(Entity.id).label('count')
     ).group_by('length_category').all()
@@ -297,10 +298,12 @@ async def get_content_quality_metrics(db: Session = Depends(get_db)):
     # Distribution of link counts
     link_count_dist = db.query(
         case(
-            (Entity.num_links == 0, 'No Links'),
-            (Entity.num_links < 5, 'Few Links'),
-            (Entity.num_links < 20, 'Some Links'),
-            (Entity.num_links < 50, 'Many Links'),
+            whens=[
+                (Entity.num_links == 0, 'No Links'),
+                (Entity.num_links < 5, 'Few Links'),
+                (Entity.num_links < 20, 'Some Links'),
+                (Entity.num_links < 50, 'Many Links'),
+            ],
             else_='Very Many Links'
         ).label('link_category'),
         func.count(Entity.id).label('count')
@@ -333,6 +336,8 @@ async def get_content_quality_metrics(db: Session = Depends(get_db)):
             "structure_percentage": round((rich_content.well_structured or 0) / rich_content.total * 100, 2) if rich_content.total else 0
         }
     }
+
+
 @router.get("/analytics/extraction-performance")
 async def get_extraction_performance(
     days: int = Query(7, description="Number of days to analyze"),
