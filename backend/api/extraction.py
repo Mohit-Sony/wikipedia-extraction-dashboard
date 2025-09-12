@@ -451,7 +451,7 @@ async def add_manual_entity(
             type=entity_type,
             short_desc=short_desc or "No data - Manual Entry",
             status="unprocessed",
-            file_path=f"/{qid}.json",
+            file_path=f"wikipedia_data/{entity_type}/{qid}.json",
             depth=0
         )
         

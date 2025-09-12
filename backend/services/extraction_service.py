@@ -755,7 +755,7 @@ class ExtractionService:
                         parent_qid=parent_entity.qid,
                         depth=parent_entity.depth + 1,
                         discovered_by=parent_entity.qid,
-                        file_path=f"placeholder/{qid}.json"
+                        file_path=f"wikipedia_data/{entity_type}/{qid}.json"
                     )
                     
                     db.add(new_entity)
