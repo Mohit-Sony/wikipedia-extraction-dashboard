@@ -29,7 +29,7 @@ import type {
   DeduplicationStatsEvent
 } from '../types'
 
-const WEBSOCKET_URL = "ws://localhost:8000/api/v1/ws"
+const WEBSOCKET_URL = import.meta.env.VITE_WS_URL || "ws://localhost:8001/api/v1/ws"
 const RECONNECT_INTERVAL = 5000 // 5 seconds
 const MAX_RECONNECT_ATTEMPTS = 5
 const PING_INTERVAL = 30000 // 30 seconds

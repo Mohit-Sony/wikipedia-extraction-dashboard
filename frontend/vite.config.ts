@@ -8,24 +8,29 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
-  server: {
-    port: 3000,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
-      '/ws': {
-        target: 'ws://localhost:8000',
-        ws: true,
+export default defineConfig(({ mode }) => {
+  const apiUrl = process.env.VITE_API_URL || 'http://localhost:8001'
+  const wsUrl = process.env.VITE_WS_URL?.replace('/api/v1/ws', '') || 'ws://localhost:8001'
+
+  return {
+    plugins: [react()],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
       },
     },
-  },
+    server: {
+      port: 3000,
+      proxy: {
+        '/api': {
+          target: apiUrl,
+          changeOrigin: true,
+        },
+        '/ws': {
+          target: wsUrl,
+          ws: true,
+        },
+      },
+    },
+  }
 })
