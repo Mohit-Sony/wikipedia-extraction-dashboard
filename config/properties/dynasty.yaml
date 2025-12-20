@@ -1,0 +1,31 @@
+entity_type: dynasty
+description: Configuration for dynasty entities
+properties:
+  - property_id: P571
+    label: inception
+    value_type: time
+    priority: high
+
+  - property_id: P576
+    label: dissolved_abolished
+    value_type: time
+    priority: high
+
+  - property_id: P112
+    label: founded_by
+    value_type: wikibase-item
+    priority: high
+    fetch_depth: 1
+
+  - property_id: P527
+    label: has_part_members
+    value_type: wikibase-item
+    priority: medium
+    multi_value: true
+    fetch_depth: 1
+
+  - property_id: P1001
+    label: applies_to_jurisdiction
+    value_type: wikibase-item
+    priority: medium
+    fetch_depth: 1

@@ -1,0 +1,37 @@
+entity_type: event
+description: Configuration for event entities
+properties:
+  - property_id: P580
+    label: start_time
+    value_type: time
+    priority: high
+
+  - property_id: P582
+    label: end_time
+    value_type: time
+    priority: high
+
+  - property_id: P276
+    label: location
+    value_type: wikibase-item
+    priority: high
+    fetch_depth: 1
+
+  - property_id: P710
+    label: participant
+    value_type: wikibase-item
+    priority: medium
+    multi_value: true
+    fetch_depth: 1
+
+  - property_id: P793
+    label: significant_event
+    value_type: wikibase-item
+    priority: medium
+    multi_value: true
+    fetch_depth: 1
+
+  - property_id: P1120
+    label: casualties
+    value_type: quantity
+    priority: medium

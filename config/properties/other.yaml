@@ -1,0 +1,25 @@
+entity_type: other
+description: Generic configuration for miscellaneous entities that don't fit other categories
+properties:
+  - property_id: P31
+    label: instance_of
+    value_type: wikibase-item
+    priority: high
+    multi_value: true
+    fetch_depth: 1
+
+  - property_id: P571
+    label: inception
+    value_type: time
+    priority: medium
+
+  - property_id: P576
+    label: dissolved_abolished
+    value_type: time
+    priority: medium
+
+  - property_id: P17
+    label: country
+    value_type: wikibase-item
+    priority: low
+    fetch_depth: 1

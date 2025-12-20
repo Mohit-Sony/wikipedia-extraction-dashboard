@@ -1,0 +1,64 @@
+entity_type: person
+description: Configuration for human entities
+properties:
+  - property_id: P569
+    label: date_of_birth
+    value_type: time
+    priority: high
+
+  - property_id: P570
+    label: date_of_death
+    value_type: time
+    priority: high
+
+  - property_id: P19
+    label: place_of_birth
+    value_type: wikibase-item
+    priority: medium
+    fetch_depth: 1
+
+  - property_id: P20
+    label: place_of_death
+    value_type: wikibase-item
+    priority: medium
+    fetch_depth: 1
+
+  - property_id: P22
+    label: father
+    value_type: wikibase-item
+    priority: high
+    fetch_depth: 1
+
+  - property_id: P25
+    label: mother
+    value_type: wikibase-item
+    priority: high
+    fetch_depth: 1
+
+  - property_id: P26
+    label: spouse
+    value_type: wikibase-item
+    priority: medium
+    multi_value: true
+    fetch_depth: 1
+
+  - property_id: P40
+    label: children
+    value_type: wikibase-item
+    priority: low
+    multi_value: true
+    fetch_depth: 1
+
+  - property_id: P39
+    label: position_held
+    value_type: wikibase-item
+    priority: medium
+    multi_value: true
+    fetch_depth: 1
+    include_qualifiers: true
+
+  - property_id: P106
+    label: occupation
+    value_type: wikibase-item
+    priority: low
+    multi_value: true

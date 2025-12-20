@@ -1,0 +1,47 @@
+entity_type: political_entity
+description: Configuration for political entity entities (kingdoms, empires, etc.)
+properties:
+  - property_id: P31
+    label: instance_of
+    value_type: wikibase-item
+    priority: high
+    multi_value: true
+    fetch_depth: 1
+
+  - property_id: P571
+    label: inception
+    value_type: time
+    priority: high
+
+  - property_id: P576
+    label: dissolved_abolished
+    value_type: time
+    priority: high
+
+  - property_id: P35
+    label: head_of_state
+    value_type: wikibase-item
+    priority: medium
+    multi_value: true
+    fetch_depth: 1
+    include_qualifiers: true
+
+  - property_id: P6
+    label: head_of_government
+    value_type: wikibase-item
+    priority: medium
+    multi_value: true
+    fetch_depth: 1
+    include_qualifiers: true
+
+  - property_id: P36
+    label: capital
+    value_type: wikibase-item
+    priority: medium
+    fetch_depth: 1
+
+  - property_id: P1001
+    label: applies_to_jurisdiction
+    value_type: wikibase-item
+    priority: low
+    fetch_depth: 1

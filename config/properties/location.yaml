@@ -1,0 +1,36 @@
+entity_type: location
+description: Configuration for location/place entities
+properties:
+  - property_id: P625
+    label: coordinate_location
+    value_type: coordinate
+    priority: high
+
+  - property_id: P31
+    label: instance_of
+    value_type: wikibase-item
+    priority: high
+    multi_value: true
+    fetch_depth: 1
+
+  - property_id: P131
+    label: located_in_administrative_territory
+    value_type: wikibase-item
+    priority: medium
+    fetch_depth: 1
+
+  - property_id: P1082
+    label: population
+    value_type: quantity
+    priority: medium
+
+  - property_id: P2046
+    label: area
+    value_type: quantity
+    priority: low
+
+  - property_id: P17
+    label: country
+    value_type: wikibase-item
+    priority: medium
+    fetch_depth: 1
