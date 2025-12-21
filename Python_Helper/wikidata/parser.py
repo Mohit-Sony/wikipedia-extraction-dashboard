@@ -34,6 +34,10 @@ class WikidataParser:
         """
         self.entity_cache = entity_cache
         self.wikidata_client = wikidata_client
+
+        # Cache for property labels
+        self._property_label_cache = {}
+
         logger.info("WikidataParser initialized")
 
     def parse_entity(
@@ -116,6 +120,202 @@ class WikidataParser:
         except Exception as e:
             logger.error(f"Error parsing Wikidata entity: {e}", exc_info=True)
             return {}
+
+    def parse_entity_universal(
+        self,
+        wikidata_json: Dict
+    ) -> Dict:
+        """
+        Parse ALL properties from Wikidata JSON (universal extraction mode).
+
+        This method extracts every available property from the Wikidata entity,
+        regardless of type or configuration. It auto-detects value types and
+        fetches property labels dynamically.
+
+        Args:
+            wikidata_json: Raw Wikidata API response
+
+        Returns:
+            Dictionary in structured_key_data format with all properties
+
+        Example:
+            >>> parser = WikidataParser(cache)
+            >>> result = parser.parse_entity_universal(wikidata_json)
+            >>> len(result)  # Could be 30, 40, 50+ properties
+            45
+        """
+        structured_data = {}
+
+        try:
+            # Extract entities from response
+            entities = wikidata_json.get('entities', {})
+            if not entities:
+                logger.warning("No entities found in Wikidata response")
+                return {}
+
+            # Get first entity (should be the one we requested)
+            entity_data = list(entities.values())[0]
+            claims = entity_data.get('claims', {})
+
+            logger.info(f"Universal extraction: Processing {len(claims)} total properties")
+
+            # Process ALL properties in claims
+            for property_id, property_claims in claims.items():
+                try:
+                    # Auto-detect value type from first claim
+                    auto_config = self._auto_detect_property_config(
+                        property_id,
+                        property_claims
+                    )
+
+                    if not auto_config:
+                        logger.debug(f"Skipping property {property_id} - could not detect config")
+                        continue
+
+                    # Parse using auto-detected config
+                    parsed_value = self._parse_property_claims(
+                        property_claims,
+                        auto_config
+                    )
+
+                    if parsed_value is not None:
+                        structured_data[property_id] = {
+                            'label': auto_config['label'],
+                            'value': parsed_value,
+                            'value_type': self._determine_value_type(
+                                parsed_value,
+                                auto_config.get('multi_value', False)
+                            )
+                        }
+
+                except Exception as e:
+                    logger.error(f"Error parsing property {property_id}: {e}")
+                    continue
+
+            logger.info(f"Successfully parsed {len(structured_data)} properties from Wikidata (universal mode)")
+            return structured_data
+
+        except Exception as e:
+            logger.error(f"Error in universal parsing: {e}", exc_info=True)
+            return {}
+
+    def _auto_detect_property_config(
+        self,
+        property_id: str,
+        claims: List[Dict]
+    ) -> Optional[Dict]:
+        """
+        Auto-detect property configuration from claims.
+
+        Analyzes the claim structure to determine value_type, multi_value,
+        and fetches the property label.
+
+        Args:
+            property_id: Property ID (e.g., 'P569')
+            claims: List of claims for this property
+
+        Returns:
+            Auto-generated property config dict
+        """
+        try:
+            if not claims:
+                return None
+
+            # Get first valid claim to inspect
+            first_claim = None
+            for claim in claims:
+                if claim.get('mainsnak', {}).get('snaktype') == 'value':
+                    first_claim = claim
+                    break
+
+            if not first_claim:
+                return None
+
+            # Detect value type from datatype
+            mainsnak = first_claim.get('mainsnak', {})
+            datatype = mainsnak.get('datatype', 'string')
+
+            # Map Wikidata datatypes to our value types
+            value_type_mapping = {
+                'time': 'time',
+                'wikibase-item': 'wikibase-item',
+                'quantity': 'quantity',
+                'globe-coordinate': 'coordinate',
+                'string': 'string',
+                'external-id': 'string',
+                'url': 'url',
+                'monolingualtext': 'monolingualtext',
+                'commonsMedia': 'string',
+                'math': 'string',
+                'musical-notation': 'string',
+                'geo-shape': 'string',
+                'tabular-data': 'string'
+            }
+
+            value_type = value_type_mapping.get(datatype, 'string')
+
+            # Determine if multi-value (if more than one claim)
+            # Filter by rank first
+            valid_claims = self._filter_claims_by_rank(claims)
+            multi_value = len(valid_claims) > 1
+
+            # Fetch property label
+            label = self._get_property_label(property_id)
+
+            config = {
+                'property_id': property_id,
+                'label': label,
+                'value_type': value_type,
+                'multi_value': multi_value,
+                'fetch_depth': 1 if value_type == 'wikibase-item' else 0
+            }
+
+            logger.debug(f"Auto-detected config for {property_id}: {config}")
+            return config
+
+        except Exception as e:
+            logger.error(f"Error auto-detecting config for {property_id}: {e}")
+            return None
+
+    def _get_property_label(self, property_id: str) -> str:
+        """
+        Get human-readable label for a property ID.
+
+        Fetches from Wikidata API and caches the result.
+
+        Args:
+            property_id: Property ID (e.g., 'P569')
+
+        Returns:
+            Property label or property_id if not found
+        """
+        # Check cache first
+        if property_id in self._property_label_cache:
+            return self._property_label_cache[property_id]
+
+        # Fetch from Wikidata
+        try:
+            if self.wikidata_client:
+                logger.debug(f"Fetching label for property {property_id}")
+                property_json = self.wikidata_client.fetch_entity_data(property_id)
+
+                if property_json:
+                    entities = property_json.get('entities', {})
+                    if property_id in entities or len(entities) == 1:
+                        property_data = entities.get(property_id, list(entities.values())[0])
+                        labels = property_data.get('labels', {})
+                        label = labels.get('en', {}).get('value', property_id)
+
+                        # Cache the label
+                        self._property_label_cache[property_id] = label
+                        return label
+
+        except Exception as e:
+            logger.debug(f"Could not fetch label for {property_id}: {e}")
+
+        # Fallback to property ID
+        self._property_label_cache[property_id] = property_id
+        return property_id
 
     def _parse_property_claims(
         self,

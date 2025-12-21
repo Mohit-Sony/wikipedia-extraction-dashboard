@@ -1,0 +1,47 @@
+═══════════════════════════════════════════════════════════════════════════════
+                    UNIVERSAL WIKIDATA RE-EXTRACTION RESULTS
+═══════════════════════════════════════════════════════════════════════════════
+
+📊 OVERALL STATISTICS
+────────────────────────────────────────────────────────────────────────────────
+  Total Entities:           12
+  ✓ Successfully Extracted: 11  (91.7%)
+  ✗ Failed:                 0   (0%)
+  ⚠ Errors:                 1   (8.3%)
+  ⏱ Processing Time:        8.4 minutes
+  
+📈 DATA IMPROVEMENT
+────────────────────────────────────────────────────────────────────────────────
+  Properties Before:        3
+  Properties After:         475
+  
+  🎯 IMPROVEMENT:           +472 properties (+15,733%)
+  
+🏆 TOP 5 ENTITIES BY PROPERTY COUNT
+────────────────────────────────────────────────────────────────────────────────
+  1. Akbar (Q8597)                    118 properties  ████████████████████
+  2. Shah Jahan (Q83672)               89 properties  ███████████████
+  3. Maharana Pratap (Q2722956)        44 properties  ████████
+  4. Ganga Singh (Q5521008)            44 properties  ████████
+  5. Rani of Jhansi (Q181878)          43 properties  ████████
+
+📁 OUTPUT LOCATION
+────────────────────────────────────────────────────────────────────────────────
+  tmp/reextracted_data/
+  ├── battle/     (1 entity,  20 properties)
+  ├── city/       (1 entity,  32 properties)
+  ├── fort/       (1 entity,  37 properties)
+  └── human/      (8 entities, 386 properties)
+
+✨ SAMPLE PROPERTIES EXTRACTED
+────────────────────────────────────────────────────────────────────────────────
+  Personal:     birth/death dates, places, family relationships
+  Career:       positions held, occupations, achievements
+  Geographic:   locations, citizenship, coordinates
+  Identifiers:  VIAF, Library of Congress, GND, ISNI, Freebase, etc.
+  Media:        images, Commons categories
+  Cultural:     religion, dynasty, conflicts
+
+═══════════════════════════════════════════════════════════════════════════════
+                              🎉 EXTRACTION COMPLETE
+═══════════════════════════════════════════════════════════════════════════════

@@ -37,6 +37,19 @@ import sys
 from typing import Any, Dict, Optional
 from urllib.parse import quote
 
+# Wikidata integration
+try:
+    from Python_Helper.wikidata_integration import WikidataIntegration, WikidataIntegrationConfig
+    WIKIDATA_AVAILABLE = True
+except ImportError:
+    try:
+        # Try relative import if running from Python_Helper directory
+        from wikidata_integration import WikidataIntegration, WikidataIntegrationConfig
+        WIKIDATA_AVAILABLE = True
+    except ImportError:
+        WIKIDATA_AVAILABLE = False
+        logging.warning("WikidataIntegration not available - structured data enrichment will be skipped")
+
 # Configure comprehensive logging
 def setup_logging(log_level: str = "INFO", log_file: Optional[str] = None) -> logging.Logger:
     """Setup comprehensive logging with file and console handlers"""
@@ -82,7 +95,7 @@ class ExtractionConfig:
     max_chunk_length: int = 1000
     batch_size: int = 50
     enable_caching: bool = True
-    user_agent: str = "OptimizedWikipediaExtractor/2.0 (Educational Purpose)"
+    user_agent: str = "WikipediaExtractor/2.0 (Educational/Research; Contact: your-email@example.com)"
 
 class CacheManager:
     """File-based caching system with TTL support"""
@@ -430,6 +443,25 @@ class OptimizedWikipediaExtractor:
         self.logger = logging.getLogger("WikipediaExtractor.Main")
         self.api_url = "https://en.wikipedia.org/w/api.php"
         self.base_url = "https://en.wikipedia.org/api/rest_v1"
+
+        # Initialize Wikidata integration
+        self.wikidata_integration = None
+        if WIKIDATA_AVAILABLE:
+            try:
+                wikidata_config = WikidataIntegrationConfig(
+                    enable_enrichment=True,
+                    config_dir="../config/properties",  # Relative to Python_Helper directory
+                    cache_file="../pipeline_state/entity_cache.pkl",
+                    cache_ttl=3600,
+                    cache_maxsize=1000
+                )
+                self.wikidata_integration = WikidataIntegration(config=wikidata_config)
+                self.logger.info("Wikidata enrichment enabled")
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize Wikidata integration: {e}")
+                self.wikidata_integration = None
+        else:
+            self.logger.info("Wikidata enrichment disabled (module not available)")
         
     async def extract_page_data(self, page_title: str) -> Dict[str, Any]:
         """Extract comprehensive data from a Wikipedia page with optimizations"""
@@ -548,10 +580,23 @@ class OptimizedWikipediaExtractor:
                 
                 extraction_time = time.time() - start_time
                 data['extraction_metadata']['extraction_time'] = round(extraction_time, 2)
-                
+
                 #self.logger.info(f"Extraction completed in {extraction_time:.2f}s")
                 self._log_extraction_summary(data)
-                
+
+                # Enrich with Wikidata structured data
+                if self.wikidata_integration and data.get('qid'):
+                    try:
+                        self.logger.info(f"Enriching with Wikidata structured data for QID: {data['qid']}")
+                        enriched_data = self.wikidata_integration.enrich(data, data['qid'])
+                        if enriched_data:
+                            data = enriched_data
+                            self.logger.info("Wikidata enrichment completed successfully")
+                        else:
+                            self.logger.warning("Wikidata enrichment returned no data")
+                    except Exception as e:
+                        self.logger.warning(f"Wikidata enrichment failed (continuing with Wikipedia data): {e}")
+
                 return data
                 
         except Exception as e:

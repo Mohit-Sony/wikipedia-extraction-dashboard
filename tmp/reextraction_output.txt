@@ -1,0 +1,208 @@
+2025-12-21 18:03:37,289 - __main__ - INFO - Output directory: /Users/mohitsoni/work/The Indian History/ai pipieline/Wikiextraction v2/Extraction dashboard/wikipedia-dashboard/tmp/reextracted_data
+2025-12-21 18:03:37,290 - __main__ - INFO - Initializing Wikidata integration with universal extraction...
+2025-12-21 18:03:37,290 - wikidata_integration - INFO - Initializing Wikidata enrichment components...
+2025-12-21 18:03:37,292 - Python_Helper.wikidata.config_manager - INFO - Loaded configuration for entity type: political_entity
+2025-12-21 18:03:37,294 - Python_Helper.wikidata.config_manager - INFO - Loaded configuration for entity type: person
+2025-12-21 18:03:37,295 - Python_Helper.wikidata.config_manager - INFO - Loaded configuration for entity type: event
+2025-12-21 18:03:37,296 - Python_Helper.wikidata.config_manager - INFO - Loaded configuration for entity type: location
+2025-12-21 18:03:37,297 - Python_Helper.wikidata.config_manager - INFO - Loaded configuration for entity type: other
+2025-12-21 18:03:37,298 - Python_Helper.wikidata.config_manager - INFO - Loaded configuration for entity type: dynasty
+2025-12-21 18:03:37,298 - wikidata_integration - INFO - PropertyConfigManager initialized with config dir: /Users/mohitsoni/work/The Indian History/ai pipieline/Wikiextraction v2/Extraction dashboard/wikipedia-dashboard/config/properties
+2025-12-21 18:03:37,298 - Python_Helper.wikidata.client - INFO - WikidataClient initialized: timeout=10s, max_retries=3, cache_ttl=3600s, cache_maxsize=1000
+2025-12-21 18:03:37,298 - wikidata_integration - INFO - WikidataClient initialized with TTL cache (ttl=3600s, maxsize=1000)
+2025-12-21 18:03:37,298 - Python_Helper.wikidata.cache - INFO - EntityReferenceCache initialized (cache_file=/Users/mohitsoni/work/The Indian History/ai pipieline/Wikiextraction v2/Extraction dashboard/wikipedia-dashboard/pipeline_state/entity_cache.pkl)
+2025-12-21 18:03:37,298 - wikidata_integration - INFO - EntityReferenceCache initialized with cache file: /Users/mohitsoni/work/The Indian History/ai pipieline/Wikiextraction v2/Extraction dashboard/wikipedia-dashboard/pipeline_state/entity_cache.pkl
+2025-12-21 18:03:37,298 - Python_Helper.wikidata.parser - INFO - WikidataParser initialized
+2025-12-21 18:03:37,298 - wikidata_integration - INFO - WikidataParser initialized with client for entity reference resolution
+2025-12-21 18:03:37,298 - Python_Helper.wikidata.type_mapper - INFO - EntityTypeMapper initialized with 0 manual overrides
+2025-12-21 18:03:37,298 - wikidata_integration - INFO - EntityTypeMapper initialized
+2025-12-21 18:03:37,298 - Python_Helper.wikidata.enricher - INFO - WikidataEnricher initialized
+2025-12-21 18:03:37,298 - wikidata_integration - INFO - WikidataEnricher initialized
+2025-12-21 18:03:37,298 - wikidata_integration - INFO - Wikidata enrichment components initialized successfully
+2025-12-21 18:03:37,298 - __main__ - INFO - ✓ Wikidata integration initialized
+2025-12-21 18:03:37,298 - __main__ - INFO - Found 12 entity files
+2025-12-21 18:03:37,302 - __main__ - INFO - Processing: Battle of Plassey (Q203233)
+2025-12-21 18:03:37,302 - Python_Helper.wikidata.enricher - INFO - Enriching entity Q203233 (Battle of Plassey)
+2025-12-21 18:03:38,146 - Python_Helper.wikidata.enricher - INFO - Determined entity type for Q203233: event
+2025-12-21 18:03:38,146 - Python_Helper.wikidata.enricher - INFO - Using universal extraction mode for Q203233
+2025-12-21 18:03:38,146 - Python_Helper.wikidata.parser - INFO - Universal extraction: Processing 20 total properties
+2025-12-21 18:04:09,460 - Python_Helper.wikidata.parser - INFO - Successfully parsed 20 properties from Wikidata (universal mode)
+2025-12-21 18:04:09,460 - Python_Helper.wikidata.enricher - INFO - Successfully enriched Q203233 with 20 properties in 32.16s
+2025-12-21 18:04:09,460 - __main__ - INFO -   ✓ Battle of Plassey: 0 → 20 properties (+20)
+2025-12-21 18:04:09,479 - __main__ - INFO -   → Saved to: tmp/reextracted_data/battle/Q203233.json
+2025-12-21 18:04:09,986 - __main__ - INFO - Processing: Burhanpur (Q593193)
+2025-12-21 18:04:09,986 - Python_Helper.wikidata.enricher - INFO - Enriching entity Q593193 (Burhanpur)
+2025-12-21 18:04:10,596 - Python_Helper.wikidata.enricher - INFO - Determined entity type for Q593193: location
+2025-12-21 18:04:10,596 - Python_Helper.wikidata.enricher - INFO - Using universal extraction mode for Q593193
+2025-12-21 18:04:10,596 - Python_Helper.wikidata.parser - INFO - Universal extraction: Processing 32 total properties
+2025-12-21 18:04:59,002 - Python_Helper.wikidata.parser - INFO - Successfully parsed 32 properties from Wikidata (universal mode)
+2025-12-21 18:04:59,003 - Python_Helper.wikidata.enricher - INFO - Successfully enriched Q593193 with 32 properties in 49.02s
+2025-12-21 18:04:59,003 - __main__ - INFO -   ✓ Burhanpur: 0 → 32 properties (+32)
+2025-12-21 18:04:59,009 - __main__ - INFO -   → Saved to: tmp/reextracted_data/city/Q593193.json
+2025-12-21 18:04:59,515 - __main__ - INFO - Processing: Red Fort (Q45957)
+2025-12-21 18:04:59,515 - Python_Helper.wikidata.enricher - INFO - Enriching entity Q45957 (Red Fort)
+2025-12-21 18:05:00,448 - Python_Helper.wikidata.enricher - INFO - Determined entity type for Q45957: location
+2025-12-21 18:05:00,448 - Python_Helper.wikidata.enricher - INFO - Using universal extraction mode for Q45957
+2025-12-21 18:05:00,448 - Python_Helper.wikidata.parser - INFO - Universal extraction: Processing 38 total properties
+2025-12-21 18:05:47,966 - Python_Helper.wikidata.parser - INFO - Successfully parsed 37 properties from Wikidata (universal mode)
+2025-12-21 18:05:47,967 - Python_Helper.wikidata.enricher - INFO - Successfully enriched Q45957 with 37 properties in 48.45s
+2025-12-21 18:05:47,967 - __main__ - INFO -   ✓ Red Fort: 0 → 37 properties (+37)
+2025-12-21 18:05:47,981 - __main__ - INFO -   → Saved to: tmp/reextracted_data/fort/Q45957.json
+2025-12-21 18:05:48,482 - __main__ - WARNING - No QID found in /Users/mohitsoni/work/The Indian History/ai pipieline/Wikiextraction v2/Extraction dashboard/wikipedia-dashboard/wikipedia_data/None/Q239505.json
+2025-12-21 18:05:48,485 - __main__ - INFO - Processing: Maharana Pratap (Q2722956)
+2025-12-21 18:05:48,485 - Python_Helper.wikidata.enricher - INFO - Enriching entity Q2722956 (Maharana Pratap)
+2025-12-21 18:05:48,993 - Python_Helper.wikidata.enricher - INFO - Determined entity type for Q2722956: person
+2025-12-21 18:05:48,993 - Python_Helper.wikidata.enricher - INFO - Using universal extraction mode for Q2722956
+2025-12-21 18:05:48,993 - Python_Helper.wikidata.parser - INFO - Universal extraction: Processing 44 total properties
+2025-12-21 18:07:03,809 - Python_Helper.wikidata.parser - INFO - Successfully parsed 44 properties from Wikidata (universal mode)
+2025-12-21 18:07:03,810 - Python_Helper.wikidata.enricher - INFO - Successfully enriched Q2722956 with 44 properties in 75.32s
+2025-12-21 18:07:03,810 - __main__ - INFO -   ✓ Maharana Pratap: 0 → 44 properties (+44)
+2025-12-21 18:07:03,818 - __main__ - INFO -   → Saved to: tmp/reextracted_data/human/Q2722956.json
+2025-12-21 18:07:04,321 - __main__ - INFO - Processing: Laxman Singh (Q6505167)
+2025-12-21 18:07:04,321 - Python_Helper.wikidata.enricher - INFO - Enriching entity Q6505167 (Laxman Singh)
+2025-12-21 18:07:05,439 - Python_Helper.wikidata.enricher - INFO - Determined entity type for Q6505167: person
+2025-12-21 18:07:05,440 - Python_Helper.wikidata.enricher - INFO - Using universal extraction mode for Q6505167
+2025-12-21 18:07:05,440 - Python_Helper.wikidata.parser - INFO - Universal extraction: Processing 16 total properties
+2025-12-21 18:07:27,192 - Python_Helper.wikidata.parser - INFO - Successfully parsed 16 properties from Wikidata (universal mode)
+2025-12-21 18:07:27,193 - Python_Helper.wikidata.enricher - INFO - Successfully enriched Q6505167 with 16 properties in 22.87s
+2025-12-21 18:07:27,193 - __main__ - INFO -   ✓ Laxman Singh: 0 → 16 properties (+16)
+2025-12-21 18:07:27,197 - __main__ - INFO -   → Saved to: tmp/reextracted_data/human/Q6505167.json
+2025-12-21 18:07:27,699 - __main__ - INFO - Processing: Sadul Singh of Bikaner (Q7398118)
+2025-12-21 18:07:27,699 - Python_Helper.wikidata.enricher - INFO - Enriching entity Q7398118 (Sadul Singh of Bikaner)
+2025-12-21 18:07:28,980 - Python_Helper.wikidata.enricher - INFO - Determined entity type for Q7398118: person
+2025-12-21 18:07:28,980 - Python_Helper.wikidata.enricher - INFO - Using universal extraction mode for Q7398118
+2025-12-21 18:07:28,980 - Python_Helper.wikidata.parser - INFO - Universal extraction: Processing 22 total properties
+2025-12-21 18:07:43,599 - Python_Helper.wikidata.parser - INFO - Successfully parsed 22 properties from Wikidata (universal mode)
+2025-12-21 18:07:43,600 - Python_Helper.wikidata.enricher - INFO - Successfully enriched Q7398118 with 22 properties in 15.90s
+2025-12-21 18:07:43,600 - __main__ - INFO -   ✓ Sadul Singh of Bikaner: 0 → 22 properties (+22)
+2025-12-21 18:07:43,603 - __main__ - INFO -   → Saved to: tmp/reextracted_data/human/Q7398118.json
+2025-12-21 18:07:44,107 - __main__ - INFO - Processing: Rani of Jhansi (Q181878)
+2025-12-21 18:07:44,107 - Python_Helper.wikidata.enricher - INFO - Enriching entity Q181878 (Rani of Jhansi)
+2025-12-21 18:07:45,556 - Python_Helper.wikidata.enricher - INFO - Determined entity type for Q181878: person
+2025-12-21 18:07:45,557 - Python_Helper.wikidata.enricher - INFO - Using universal extraction mode for Q181878
+2025-12-21 18:07:45,557 - Python_Helper.wikidata.parser - INFO - Universal extraction: Processing 44 total properties
+2025-12-21 18:08:29,701 - Python_Helper.wikidata.parser - INFO - Successfully parsed 43 properties from Wikidata (universal mode)
+2025-12-21 18:08:29,701 - Python_Helper.wikidata.enricher - INFO - Successfully enriched Q181878 with 43 properties in 45.59s
+2025-12-21 18:08:29,701 - __main__ - INFO -   ✓ Rani of Jhansi: 0 → 43 properties (+43)
+2025-12-21 18:08:29,711 - __main__ - INFO -   → Saved to: tmp/reextracted_data/human/Q181878.json
+2025-12-21 18:08:30,219 - __main__ - INFO - Processing: Shah Jahan (Q83672)
+2025-12-21 18:08:30,219 - Python_Helper.wikidata.enricher - INFO - Enriching entity Q83672 (Shah Jahan)
+2025-12-21 18:08:32,028 - Python_Helper.wikidata.enricher - INFO - Determined entity type for Q83672: person
+2025-12-21 18:08:32,028 - Python_Helper.wikidata.enricher - INFO - Using universal extraction mode for Q83672
+2025-12-21 18:08:32,028 - Python_Helper.wikidata.parser - INFO - Universal extraction: Processing 89 total properties
+2025-12-21 18:09:58,457 - Python_Helper.wikidata.parser - INFO - Successfully parsed 89 properties from Wikidata (universal mode)
+2025-12-21 18:09:58,459 - Python_Helper.wikidata.enricher - INFO - Successfully enriched Q83672 with 89 properties in 88.24s
+2025-12-21 18:09:58,459 - __main__ - INFO -   ✓ Shah Jahan: 0 → 89 properties (+89)
+2025-12-21 18:09:58,475 - __main__ - INFO -   → Saved to: tmp/reextracted_data/human/Q83672.json
+2025-12-21 18:09:58,985 - __main__ - INFO - Processing: Akbar (Q8597)
+2025-12-21 18:09:58,985 - Python_Helper.wikidata.enricher - INFO - Enriching entity Q8597 (Akbar)
+2025-12-21 18:10:00,609 - Python_Helper.wikidata.enricher - INFO - Determined entity type for Q8597: person
+2025-12-21 18:10:00,610 - Python_Helper.wikidata.enricher - INFO - Using universal extraction mode for Q8597
+2025-12-21 18:10:00,610 - Python_Helper.wikidata.parser - INFO - Universal extraction: Processing 118 total properties
+2025-12-21 18:11:23,373 - Python_Helper.wikidata.parser - INFO - Successfully parsed 118 properties from Wikidata (universal mode)
+2025-12-21 18:11:23,374 - Python_Helper.wikidata.enricher - INFO - Successfully enriched Q8597 with 118 properties in 84.39s
+2025-12-21 18:11:23,375 - __main__ - INFO -   ✓ Akbar: 0 → 118 properties (+118)
+2025-12-21 18:11:23,401 - __main__ - INFO -   → Saved to: tmp/reextracted_data/human/Q8597.json
+2025-12-21 18:11:23,908 - __main__ - INFO - Processing: Ganga Singh (Q5521008)
+2025-12-21 18:11:23,909 - Python_Helper.wikidata.enricher - INFO - Enriching entity Q5521008 (Ganga Singh)
+2025-12-21 18:11:23,909 - Python_Helper.wikidata.enricher - INFO - Determined entity type for Q5521008: person
+2025-12-21 18:11:23,909 - Python_Helper.wikidata.enricher - INFO - Using universal extraction mode for Q5521008
+2025-12-21 18:11:23,909 - Python_Helper.wikidata.parser - INFO - Universal extraction: Processing 44 total properties
+2025-12-21 18:11:53,625 - Python_Helper.wikidata.parser - INFO - Successfully parsed 44 properties from Wikidata (universal mode)
+2025-12-21 18:11:53,626 - Python_Helper.wikidata.enricher - INFO - Successfully enriched Q5521008 with 44 properties in 29.72s
+2025-12-21 18:11:53,626 - __main__ - INFO -   ✓ Ganga Singh: 0 → 44 properties (+44)
+2025-12-21 18:11:53,632 - __main__ - INFO -   → Saved to: tmp/reextracted_data/human/Q5521008.json
+2025-12-21 18:11:54,134 - __main__ - INFO - Processing: Banvir (Q29261508)
+2025-12-21 18:11:54,134 - Python_Helper.wikidata.enricher - INFO - Enriching entity Q29261508 (Banvir)
+2025-12-21 18:11:54,676 - Python_Helper.wikidata.enricher - INFO - Determined entity type for Q29261508: person
+2025-12-21 18:11:54,676 - Python_Helper.wikidata.enricher - INFO - Using universal extraction mode for Q29261508
+2025-12-21 18:11:54,676 - Python_Helper.wikidata.parser - INFO - Universal extraction: Processing 10 total properties
+2025-12-21 18:12:00,206 - Python_Helper.wikidata.parser - INFO - Successfully parsed 10 properties from Wikidata (universal mode)
+2025-12-21 18:12:00,207 - Python_Helper.wikidata.enricher - INFO - Successfully enriched Q29261508 with 10 properties in 6.07s
+2025-12-21 18:12:00,207 - __main__ - INFO -   ✓ Banvir: 3 → 10 properties (+7)
+2025-12-21 18:12:00,210 - __main__ - INFO -   → Saved to: tmp/reextracted_data/human/Q29261508.json
+2025-12-21 18:12:00,715 - __main__ - INFO - Summary saved to: /Users/mohitsoni/work/The Indian History/ai pipieline/Wikiextraction v2/Extraction dashboard/wikipedia-dashboard/tmp/reextracted_data/_reextraction_summary.json
+================================================================================
+UNIVERSAL WIKIDATA PROPERTY RE-EXTRACTION
+================================================================================
+
+
+Scanning: /Users/mohitsoni/work/The Indian History/ai pipieline/Wikiextraction v2/Extraction dashboard/wikipedia-dashboard/wikipedia_data
+Found: 12 entities to re-extract
+
+Starting re-extraction...
+--------------------------------------------------------------------------------
+
+[1/12] Processing: Q203233.json
+
+[2/12] Processing: Q593193.json
+
+[3/12] Processing: Q45957.json
+
+[4/12] Processing: Q239505.json
+
+[5/12] Processing: Q2722956.json
+
+[6/12] Processing: Q6505167.json
+
+[7/12] Processing: Q7398118.json
+
+[8/12] Processing: Q181878.json
+
+[9/12] Processing: Q83672.json
+
+[10/12] Processing: Q8597.json
+
+[11/12] Processing: Q5521008.json
+
+[12/12] Processing: Q29261508.json
+
+================================================================================
+RE-EXTRACTION COMPLETE
+================================================================================
+
+Total Entities: 12
+✓ Successful: 11
+✗ Failed: 0
+⚠ Errors: 1
+⏱ Time: 503.4 seconds (8.4 minutes)
+
+Property Extraction Statistics:
+  Before: 3 total properties
+  After: 475 total properties
+  Improvement: +472 properties (15733.3%)
+
+Detailed Results:
+--------------------------------------------------------------------------------
+✓ Q203233 - Battle of Plassey
+   0 → 20 properties (+20)
+✓ Q593193 - Burhanpur
+   0 → 32 properties (+32)
+✓ Q45957 - Red Fort
+   0 → 37 properties (+37)
+✓ Q2722956 - Maharana Pratap
+   0 → 44 properties (+44)
+✓ Q6505167 - Laxman Singh
+   0 → 16 properties (+16)
+✓ Q7398118 - Sadul Singh of Bikaner
+   0 → 22 properties (+22)
+✓ Q181878 - Rani of Jhansi
+   0 → 43 properties (+43)
+✓ Q83672 - Shah Jahan
+   0 → 89 properties (+89)
+✓ Q8597 - Akbar
+   0 → 118 properties (+118)
+✓ Q5521008 - Ganga Singh
+   0 → 44 properties (+44)
+✓ Q29261508 - Banvir
+   3 → 10 properties (+7)
+
+Output saved to: /Users/mohitsoni/work/The Indian History/ai pipieline/Wikiextraction v2/Extraction dashboard/wikipedia-dashboard/tmp/reextracted_data
+
+Wikidata Enrichment Statistics:
+  Total Enriched: 11
+  Success Rate: 100.0%
+  API Calls: 11
+  Cache Hits: 0
+  Cache Hit Rate: 0.0%
+

@@ -120,7 +120,7 @@ class WikidataClient:
         Fetch entity data from Wikidata with retry logic and TTL caching.
 
         Args:
-            qid: Wikidata entity ID (e.g., 'Q1001')
+            qid: Wikidata entity ID (e.g., 'Q1001') or property ID (e.g., 'P569')
 
         Returns:
             Dictionary containing entity data, or None if fetch fails
@@ -131,8 +131,8 @@ class WikidataClient:
             >>> data['entities']['Q1001']['labels']['en']['value']
             'Mahatma Gandhi'
         """
-        if not qid or not qid.startswith('Q'):
-            logger.error(f"Invalid QID format: {qid}")
+        if not qid or (not qid.startswith('Q') and not qid.startswith('P')):
+            logger.error(f"Invalid entity/property ID format: {qid}")
             return None
 
         start_time = time.time()

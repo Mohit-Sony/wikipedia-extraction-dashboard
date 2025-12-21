@@ -24,13 +24,22 @@ from pathlib import Path
 from typing import Dict, Optional, Any
 from dataclasses import dataclass
 
-# Import Wikidata components
-from wikidata.config_manager import PropertyConfigManager
-from wikidata.client import WikidataClient
-from wikidata.cache import EntityReferenceCache
-from wikidata.parser import WikidataParser
-from wikidata.type_mapper import EntityTypeMapper
-from wikidata.enricher import WikidataEnricher
+# Import Wikidata components (handle both relative and absolute imports)
+try:
+    from Python_Helper.wikidata.config_manager import PropertyConfigManager
+    from Python_Helper.wikidata.client import WikidataClient
+    from Python_Helper.wikidata.cache import EntityReferenceCache
+    from Python_Helper.wikidata.parser import WikidataParser
+    from Python_Helper.wikidata.type_mapper import EntityTypeMapper
+    from Python_Helper.wikidata.enricher import WikidataEnricher
+except ImportError:
+    # Fallback to relative imports when running from Python_Helper directory
+    from wikidata.config_manager import PropertyConfigManager
+    from wikidata.client import WikidataClient
+    from wikidata.cache import EntityReferenceCache
+    from wikidata.parser import WikidataParser
+    from wikidata.type_mapper import EntityTypeMapper
+    from wikidata.enricher import WikidataEnricher
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +57,8 @@ class WikidataIntegrationConfig:
     # Phase 4 Step 11: Performance optimization parameters
     cache_ttl: int = 3600  # TTL cache duration in seconds (1 hour)
     cache_maxsize: int = 1000  # Maximum number of entries in TTL cache
+    # Universal extraction mode: extract ALL properties from Wikidata
+    extract_all_properties: bool = True  # Default: extract all properties
 
 
 class WikidataIntegration:
@@ -175,7 +186,12 @@ class WikidataIntegration:
             return wikipedia_data
 
         try:
-            return self.enricher.enrich_entity(wikipedia_data, entity)
+            # Pass extract_all_properties from config to enricher
+            return self.enricher.enrich_entity(
+                wikipedia_data,
+                entity,
+                extract_all_properties=self.config.extract_all_properties
+            )
         except Exception as e:
             logger.error(f"Error during enrichment: {e}", exc_info=True)
             wikipedia_data['structured_key_data_extracted'] = False

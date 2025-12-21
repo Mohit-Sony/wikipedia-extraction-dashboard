@@ -62,7 +62,8 @@ class WikidataEnricher:
     def enrich_entity(
         self,
         wikipedia_data: Dict,
-        entity: Any
+        entity: Any,
+        extract_all_properties: bool = True
     ) -> Dict:
         """
         Enrich Wikipedia data with Wikidata structured data.
@@ -75,6 +76,9 @@ class WikidataEnricher:
         Args:
             wikipedia_data: Dictionary containing Wikipedia extraction results
             entity: WikiEntity object with metadata (qid, type, etc.)
+            extract_all_properties: If True, extracts ALL properties from Wikidata.
+                                   If False, uses type-based YAML configuration.
+                                   Default: True (universal extraction)
 
         Returns:
             Dictionary with added structured_key_data field and extraction flag
@@ -124,19 +128,25 @@ class WikidataEnricher:
 
             logger.info(f"Determined entity type for {qid}: {standard_type}")
 
-            # Get property configuration for this entity type
-            property_config = self._get_property_config(standard_type)
-            if not property_config:
-                logger.warning(f"No property configuration for type: {standard_type}")
-                wikipedia_data['structured_key_data_extracted'] = False
-                self.stats['failed'] += 1
-                return wikipedia_data
-
             # Parse Wikidata JSON to structured format
-            structured_data = self.parser.parse_entity(
-                wikidata_json,
-                property_config
-            )
+            if extract_all_properties:
+                # UNIVERSAL EXTRACTION MODE: Extract ALL properties
+                logger.info(f"Using universal extraction mode for {qid}")
+                structured_data = self.parser.parse_entity_universal(wikidata_json)
+            else:
+                # CONFIG-BASED EXTRACTION MODE: Extract only configured properties
+                logger.info(f"Using config-based extraction mode for {qid}")
+                property_config = self._get_property_config(standard_type)
+                if not property_config:
+                    logger.warning(f"No property configuration for type: {standard_type}")
+                    wikipedia_data['structured_key_data_extracted'] = False
+                    self.stats['failed'] += 1
+                    return wikipedia_data
+
+                structured_data = self.parser.parse_entity(
+                    wikidata_json,
+                    property_config
+                )
 
             if not structured_data:
                 logger.warning(f"No structured data extracted for {qid}")

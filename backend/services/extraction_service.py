@@ -531,9 +531,17 @@ class ExtractionService:
             from services.file_service import FileService
             file_service = FileService()
             
-            entity_type = str(extracted_data.get('type', 'unknown')).replace(' ', '_').replace('/', '_')
+            # Get entity type from extracted data, but preserve existing type if extraction failed
+            extracted_type = extracted_data.get('type')
+            if extracted_type and extracted_type != 'None' and str(extracted_type).lower() != 'none':
+                entity_type = str(extracted_type).replace(' ', '_').replace('/', '_')
+            else:
+                # If extraction didn't return a type, keep the existing entity type
+                entity_type = entity.type if entity.type else 'unknown'
+                logger.warning(f"Extraction didn't return type for {entity_qid}, using existing type: {entity_type}")
+
             file_saved = file_service.save_entity_data(entity_qid, entity_type, extracted_data)
-            
+
             if not file_saved:
                 logger.warning(f"Failed to save file for entity {entity_qid}, but continuing with database update")
 
@@ -541,11 +549,11 @@ class ExtractionService:
             print(f"\n{'='*50}")
             print(f"MAKING CHANGES TO ENTITY")
             print(f"{'='*50}")
-            
+
             # Test tracking BEFORE making changes
             test_change = entity.updated_at  # Read current value
             entity.updated_at = datetime.now()  # Make test change
-            
+
             print(f"After test change - Entity in dirty set: {entity in db.dirty}")
             if entity not in db.dirty:
                 print("🚨 CRITICAL: Entity changes not being tracked!")
@@ -555,7 +563,7 @@ class ExtractionService:
                 print(f"After force re-attach - Entity in dirty set: {entity in db.dirty}")
             else:
                 print("✅ Entity changes are being tracked")
-            
+
             # Store old values for comparison
             old_values = {
                 'num_links': entity.num_links,
@@ -565,9 +573,11 @@ class ExtractionService:
                 'page_length': entity.page_length,
                 'status': entity.status
             }
-            
+
             # === MAKE ACTUAL CHANGES ===
-            entity.type = entity_type
+            # Only update type if we have a valid extracted type
+            if extracted_type and extracted_type != 'None' and str(extracted_type).lower() != 'none':
+                entity.type = entity_type
             entity.num_links = len(extracted_data.get('links', {}).get('internal_links', []))
             entity.num_tables = len(extracted_data.get('tables', []))
             entity.num_images = len(extracted_data.get('images', []))

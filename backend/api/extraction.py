@@ -271,7 +271,7 @@ async def get_qid_and_type(title: str) -> tuple[Optional[str], Optional[str]]:
     """
     timeout = aiohttp.ClientTimeout(total=30)
     headers = {
-        'User-Agent': 'WikipediaExtractor/1.0 (https://example.com/bot)'
+        'User-Agent': 'WikipediaExtractor/2.0 (Educational/Research; Contact: your-email@example.com)'
     }
     
     async with aiohttp.ClientSession(timeout=timeout, headers=headers) as session:
@@ -289,42 +289,42 @@ async def get_qid_and_type(title: str) -> tuple[Optional[str], Optional[str]]:
             async with session.get(wiki_api_url, params=wiki_params) as response:
                 if response.status != 200:
                     logger.warning(f"Wikipedia API returned status {response.status} for {title}")
-                    return None, None
-                
+                    return None, None, None, None
+
                 data = await response.json()
                 print(data)
-                
+
                 if not data or 'query' not in data:
                     logger.warning(f"No query data returned for {title}")
-                    return None, None
-                
+                    return None, None, None, None
+
                 pages = data.get("query", {}).get("pages", {})
                 if not pages:
                     logger.warning(f"No pages found for {title}")
-                    return None, None
-                
+                    return None, None, None, None
+
                 # Get the first (and should be only) page
                 page_info = next(iter(pages.values()))
-                
+
                 # Check if page exists
                 if 'missing' in page_info:
                     logger.warning(f"Page not found for {title}")
-                    return None, None
-                
+                    return None, None, None, None
+
                 # Extract QID
                 qid = page_info.get("pageprops", {}).get("wikibase_item")
                 short_desc = page_info.get("pageprops", {}).get("wikibase-shortdesc")
                 query = data.get("query", {})
                 redirects = query.get("redirects", [])
-                
+
                 # Build redirect map: original → resolved
                 redirect_map = {r["from"]: r["to"] for r in redirects}
                 redirect_title = redirect_map.get(title) or title  # only set if it was redirected
 
-                
+
                 if not qid:
                     logger.warning(f"No QID found for {title}")
-                    return None, None
+                    return None, None, None, None
                 
                 logger.info(f"Found QID {qid} for {title}")
             
@@ -405,10 +405,10 @@ async def get_qid_and_type(title: str) -> tuple[Optional[str], Optional[str]]:
                 
         except aiohttp.ClientError as e:
             logger.error(f"Network error resolving '{title}': {e}")
-            return None, None
+            return None, None, None, None
         except Exception as e:
             logger.error(f"Unexpected error resolving '{title}': {e}")
-            return None, None
+            return None, None, None, None
 
 
 @router.post("/entities/manual", response_model=ManualEntityResponse)
