@@ -2,13 +2,13 @@
 // src/components/dashboard/QuickActions.tsx
 import React from 'react'
 import { Card, Button, Space, Typography, Divider } from 'antd'
-import { 
-  SyncOutlined, 
-  DatabaseOutlined, 
-  BarChartOutlined, 
+import {
+  SyncOutlined,
+  DatabaseOutlined,
+  BarChartOutlined,
   SettingOutlined,
   PlayCircleOutlined,
-  
+  TagsOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useTriggerSyncMutation } from '../../store/api'
@@ -72,28 +72,37 @@ export const QuickActions: React.FC = () => {
         <div>
           <Title level={5}>Navigation</Title>
           <Space direction="vertical" style={{ width: '100%' }}>
-            <Button 
+            <Button
               icon={<DatabaseOutlined />}
               onClick={() => navigate('/entities')}
               block
             >
               Manage Entities
             </Button>
-            <Button 
+            <Button
               icon={<PlayCircleOutlined />}
               onClick={() => navigate('/queues')}
               block
             >
               Queue Manager
             </Button>
-            <Button 
+            <Button
+              icon={<TagsOutlined />}
+              onClick={() => navigate('/type-mappings')}
+              block
+              type="primary"
+              ghost
+            >
+              Type Mappings
+            </Button>
+            <Button
               icon={<BarChartOutlined />}
               onClick={() => navigate('/analytics')}
               block
             >
               View Analytics
             </Button>
-            <Button 
+            <Button
               icon={<SettingOutlined />}
               onClick={() => navigate('/system')}
               block

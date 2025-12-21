@@ -13,7 +13,7 @@ from database.database import init_database, get_db
 from database.models import Entity,UserDecision,QueueEntry
 
 # API routers
-from api import entities, queues, analytics, websocket, extraction , files  # NEW: extraction
+from api import entities, queues, analytics, websocket, extraction, files, type_mappings  # NEW: type_mappings
 
 # Services
 from services.file_service import FileService
@@ -113,6 +113,7 @@ app.include_router(analytics.router, prefix="/api/v1", tags=["analytics"])
 app.include_router(websocket.router, prefix="/api/v1", tags=["websocket"])
 app.include_router(extraction.router, prefix="/api/v1", tags=["extraction"])  # NEW
 app.include_router(files.router, prefix="/api/v1", tags=["files"])
+app.include_router(type_mappings.router, prefix="/api/v1", tags=["type-mappings"])  # NEW
 
 # Root endpoint
 @app.get("/")

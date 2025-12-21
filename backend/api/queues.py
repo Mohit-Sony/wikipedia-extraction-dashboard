@@ -770,7 +770,7 @@ async def bulk_approve_review_entities(
     operation: BulkReviewOperation,
     db: Session = Depends(get_db)
 ):
-    """FIXED: Bulk approve specific entities from review queue by QID list"""
+    """FIXED: Bulk approve specific entities from review queue by QID list with optional type filtering"""
     try:
         if not operation.qids:
             return BatchOperationResult(
@@ -779,18 +779,39 @@ async def bulk_approve_review_entities(
                 skipped_count=0,
                 errors=[{"qid": "none", "error": "No QIDs provided"}]
             )
-        
+
         results = BatchOperationResult(
             success_count=0,
             error_count=0,
             skipped_count=0,
             errors=[]
         )
-        
+
         # Use validation service instead of broken dedup logic
         validation_service = QueueValidationService()
-        
-        for qid in operation.qids:
+
+        # Apply type filtering if requested
+        qids_to_process = operation.qids
+        if operation.filter_by_type:
+            from services.type_filter_service import TypeFilterService
+            type_service = TypeFilterService(db)
+            filter_result = type_service.filter_entities_by_approved_types(operation.qids)
+
+            qids_to_process = filter_result["approved"]
+
+            # Add rejected ones to skipped with error
+            for rejected_qid in filter_result["rejected"]:
+                results.skipped_count += 1
+                results.errors.append({
+                    "qid": rejected_qid,
+                    "error": "Type not approved for extraction"
+                })
+
+            logger.info(f"Type filter: {len(filter_result['approved'])} approved, "
+                       f"{len(filter_result['rejected'])} rejected. "
+                       f"Unmapped types: {filter_result.get('unmapped_types', [])}")
+
+        for qid in qids_to_process:
             try:
                 # Get the queue entry for this specific QID in review queue
                 entry = db.query(QueueEntry).join(Entity).filter(

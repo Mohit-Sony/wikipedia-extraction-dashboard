@@ -147,11 +147,13 @@ class BatchOperationResult(BaseModel):
 # Add this to backend/utils/schemas.py if not already present:
 class BulkReviewOperation(BaseModel):
     """Schema for bulk review operations (approve/reject specific QIDs)"""
-    operation: str  # 'approve' or 'reject' 
+    operation: str  # 'approve' or 'reject'
     qids: List[str]  # List of specific QIDs to process
     target_queue: Optional[QueueType] = None  # Target queue (for approve operations)
     priority: Optional[Priority] = None  # Priority to assign
     notes: Optional[str] = None  # Optional notes
+    filter_by_type: bool = False  # NEW: Whether to filter by approved types
+    approved_types: Optional[List[str]] = None  # NEW: List of approved types to filter by
 
 class BulkReviewResult(BaseModel):
     """Result of bulk review operations"""

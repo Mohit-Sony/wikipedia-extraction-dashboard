@@ -98,7 +98,7 @@ class UserPreference(Base):
 
 class ExtractionLog(Base):
     __tablename__ = "extraction_logs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(Integer, ForeignKey("extraction_sessions.id"))
     qid = Column(String, nullable=False)
@@ -106,6 +106,21 @@ class ExtractionLog(Base):
     event_data = Column(JSON)  # Additional event data
     timestamp = Column(DateTime, default=datetime.utcnow)
     message = Column(Text)
-    
+
     # Relationships
     session = relationship("ExtractionSession")
+
+class TypeMapping(Base):
+    __tablename__ = "type_mappings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    wikidata_type = Column(String, unique=True, nullable=False, index=True)  # Wikidata P31 value or Wikipedia type
+    wikidata_qid = Column(String, index=True)  # Optional: QID of the type itself
+    mapped_type = Column(String, nullable=False, index=True)  # One of: person, location, event, dynasty, political_entity, timeline
+    is_approved = Column(Boolean, default=False)  # Whether this mapping is approved
+    confidence = Column(Float, default=1.0)  # Confidence score for auto-mapped types
+    source = Column(String, default="manual")  # manual, auto, wikidata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = Column(String, default="system")
+    notes = Column(Text)  # Additional notes about this mapping

@@ -11,6 +11,7 @@ import { QueueManager } from './pages/QueueManager'
 import { Analytics } from './pages/Analytics'
 import { ExtractionManager } from './pages/ExtractionManager'
 import { SystemStatus } from './pages/SystemStatus'
+import TypeMappings from './pages/TypeMappings'
 import { NotificationProvider } from './components/common/NotificationProvider'
 import { useWebSocket } from './hooks/useWebSocket'
 import './App.css'
@@ -61,6 +62,7 @@ const AppContent: React.FC = () => {
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/system" element={<SystemStatus />} />
           <Route path="/extraction" element={<ExtractionManager />} />
+          <Route path="/type-mappings" element={<TypeMappings />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </MainLayout>

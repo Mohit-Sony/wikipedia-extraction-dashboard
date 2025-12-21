@@ -1,9 +1,9 @@
 // src/pages/SystemStatus.tsx - CORRECTED VERSION
 import React from 'react'
 import { Row, Col, Card, Statistic, Alert, Button, Typography, Space, Tag, Progress, List, Descriptions } from 'antd'
-import { 
-  DatabaseOutlined,  
-  WifiOutlined, 
+import {
+  DatabaseOutlined,
+  WifiOutlined,
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   ReloadOutlined,
@@ -12,7 +12,6 @@ import {
   ApiOutlined,
   HddOutlined,
   WarningOutlined,
-  InfoCircleOutlined,
   ClockCircleOutlined
 } from '@ant-design/icons'
 import { 
