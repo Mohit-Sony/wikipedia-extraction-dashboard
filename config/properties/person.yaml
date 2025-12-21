@@ -62,3 +62,4 @@ properties:
     value_type: wikibase-item
     priority: low
     multi_value: true
+    fetch_depth: 1

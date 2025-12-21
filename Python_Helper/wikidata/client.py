@@ -2,7 +2,7 @@
 Wikidata API Client
 
 Provides a robust client for fetching entity data from Wikidata's EntityData API.
-Includes retry logic, rate limiting, and comprehensive error handling.
+Includes retry logic, rate limiting, TTL caching, and comprehensive error handling.
 """
 
 import logging
@@ -11,6 +11,7 @@ import requests
 from typing import Optional, Dict
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from cachetools import TTLCache
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,9 @@ class WikidataClient:
         self,
         timeout: int = 10,
         max_retries: int = 3,
-        requests_per_second: float = 1.0
+        requests_per_second: float = 1.0,
+        cache_ttl: int = 3600,
+        cache_maxsize: int = 1000
     ):
         """
         Initialize Wikidata API client.
@@ -67,10 +70,24 @@ class WikidataClient:
             timeout: Request timeout in seconds
             max_retries: Maximum number of retry attempts
             requests_per_second: Rate limit for API requests
+            cache_ttl: Time-to-live for cache entries in seconds (default 1 hour)
+            cache_maxsize: Maximum number of entries in cache
         """
         self.timeout = timeout
         self.max_retries = max_retries
         self.rate_limiter = RateLimiter(requests_per_second)
+
+        # TTL cache for API responses (Phase 4 Step 11 optimization)
+        self.request_cache = TTLCache(maxsize=cache_maxsize, ttl=cache_ttl)
+
+        # Performance metrics
+        self.metrics = {
+            'api_calls': 0,
+            'cache_hits': 0,
+            'cache_misses': 0,
+            'total_fetch_time': 0.0,
+            'errors': 0
+        }
 
         # Create session with retry strategy
         self.session = requests.Session()
@@ -93,11 +110,14 @@ class WikidataClient:
             'Accept': 'application/json'
         })
 
-        logger.info(f"WikidataClient initialized with timeout={timeout}s, max_retries={max_retries}")
+        logger.info(
+            f"WikidataClient initialized: timeout={timeout}s, max_retries={max_retries}, "
+            f"cache_ttl={cache_ttl}s, cache_maxsize={cache_maxsize}"
+        )
 
     def fetch_entity_data(self, qid: str) -> Optional[Dict]:
         """
-        Fetch entity data from Wikidata with retry logic.
+        Fetch entity data from Wikidata with retry logic and TTL caching.
 
         Args:
             qid: Wikidata entity ID (e.g., 'Q1001')
@@ -115,7 +135,17 @@ class WikidataClient:
             logger.error(f"Invalid QID format: {qid}")
             return None
 
+        start_time = time.time()
+
         try:
+            # Check TTL cache first (Phase 4 Step 11 optimization)
+            if qid in self.request_cache:
+                self.metrics['cache_hits'] += 1
+                logger.debug(f"Cache hit for {qid}")
+                return self.request_cache[qid]
+
+            self.metrics['cache_misses'] += 1
+
             # Apply rate limiting
             self.rate_limiter.wait()
 
@@ -123,17 +153,28 @@ class WikidataClient:
             response = self._make_request(qid)
 
             if response is None:
+                self.metrics['errors'] += 1
                 return None
 
             # Validate response
             if not self._validate_response(response, qid):
+                self.metrics['errors'] += 1
                 return None
 
-            logger.debug(f"Successfully fetched data for {qid}")
+            # Cache successful response
+            self.request_cache[qid] = response
+
+            # Update metrics
+            fetch_time = time.time() - start_time
+            self.metrics['total_fetch_time'] += fetch_time
+            self.metrics['api_calls'] += 1
+
+            logger.debug(f"Successfully fetched data for {qid} in {fetch_time:.2f}s")
             return response
 
         except Exception as e:
             logger.error(f"Unexpected error fetching {qid}: {e}")
+            self.metrics['errors'] += 1
             return None
 
     def _make_request(self, qid: str) -> Optional[Dict]:
@@ -276,9 +317,75 @@ class WikidataClient:
         logger.info(f"Fetched {len(results)} out of {len(qids)} entities")
         return results
 
+    def get_metrics(self) -> Dict:
+        """
+        Get performance metrics.
+
+        Returns:
+            Dictionary with performance statistics
+
+        Example:
+            >>> client.get_metrics()
+            {
+                'api_calls': 50,
+                'cache_hits': 30,
+                'cache_misses': 20,
+                'cache_hit_rate': 0.6,
+                'avg_fetch_time': 1.23,
+                'errors': 2
+            }
+        """
+        total_requests = self.metrics['cache_hits'] + self.metrics['cache_misses']
+        cache_hit_rate = (
+            self.metrics['cache_hits'] / total_requests
+            if total_requests > 0 else 0.0
+        )
+        avg_fetch_time = (
+            self.metrics['total_fetch_time'] / self.metrics['api_calls']
+            if self.metrics['api_calls'] > 0 else 0.0
+        )
+
+        return {
+            'api_calls': self.metrics['api_calls'],
+            'cache_hits': self.metrics['cache_hits'],
+            'cache_misses': self.metrics['cache_misses'],
+            'cache_hit_rate': cache_hit_rate,
+            'avg_fetch_time': avg_fetch_time,
+            'errors': self.metrics['errors'],
+            'cache_size': len(self.request_cache)
+        }
+
+    def log_metrics(self):
+        """Log performance metrics to logger."""
+        metrics = self.get_metrics()
+        logger.info("=" * 50)
+        logger.info("Wikidata Client Performance Metrics")
+        logger.info("=" * 50)
+        logger.info(f"API Calls:        {metrics['api_calls']}")
+        logger.info(f"Cache Hits:       {metrics['cache_hits']}")
+        logger.info(f"Cache Misses:     {metrics['cache_misses']}")
+        logger.info(f"Cache Hit Rate:   {metrics['cache_hit_rate']:.2%}")
+        logger.info(f"Cache Size:       {metrics['cache_size']}")
+        logger.info(f"Avg Fetch Time:   {metrics['avg_fetch_time']:.3f}s")
+        logger.info(f"Errors:           {metrics['errors']}")
+        logger.info("=" * 50)
+
+    def reset_metrics(self):
+        """Reset performance metrics to zero."""
+        self.metrics = {
+            'api_calls': 0,
+            'cache_hits': 0,
+            'cache_misses': 0,
+            'total_fetch_time': 0.0,
+            'errors': 0
+        }
+        logger.info("Performance metrics reset")
+
     def close(self):
         """Close the session and cleanup resources."""
         if self.session:
+            # Log final metrics before closing
+            self.log_metrics()
             self.session.close()
             logger.info("WikidataClient session closed")
 

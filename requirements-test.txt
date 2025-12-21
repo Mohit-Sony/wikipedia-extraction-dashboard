@@ -1,0 +1,15 @@
+# Testing dependencies for Wikipedia Dashboard
+
+# Core testing framework
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.11.1
+
+# For async testing if needed
+pytest-asyncio>=0.21.0
+
+# For better test output
+pytest-html>=3.2.0
+
+# Code coverage
+coverage>=7.2.0
