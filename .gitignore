@@ -22,3 +22,4 @@ test
 .bmad-core/
 tmp
 credentials.json
+token.json

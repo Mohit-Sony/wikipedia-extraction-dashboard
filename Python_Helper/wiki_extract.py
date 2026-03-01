@@ -588,7 +588,15 @@ class OptimizedWikipediaExtractor:
                 if self.wikidata_integration and data.get('qid'):
                     try:
                         self.logger.info(f"Enriching with Wikidata structured data for QID: {data['qid']}")
-                        enriched_data = self.wikidata_integration.enrich(data, data['qid'])
+
+                        # Create a mock entity object with required attributes
+                        class MockEntity:
+                            def __init__(self, qid, entity_type):
+                                self.qid = qid
+                                self.type = entity_type
+
+                        entity = MockEntity(data['qid'], data.get('type'))
+                        enriched_data = self.wikidata_integration.enrich(data, entity)
                         if enriched_data:
                             data = enriched_data
                             self.logger.info("Wikidata enrichment completed successfully")
