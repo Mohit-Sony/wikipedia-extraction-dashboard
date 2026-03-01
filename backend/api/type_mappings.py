@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database.database import get_db
 from services.type_filter_service import TypeFilterService
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 import logging
 
@@ -14,28 +14,28 @@ router = APIRouter()
 class TypeMappingCreate(BaseModel):
     wikidata_type: str
     mapped_type: str
-    wikidata_qid: str = None
+    wikidata_qid: Optional[str] = None
     is_approved: bool = True
     source: str = "manual"
     created_by: str = "admin"
-    notes: str = None
+    notes: Optional[str] = None
 
 class TypeMappingUpdate(BaseModel):
-    mapped_type: str = None
-    wikidata_qid: str = None
-    is_approved: bool = None
-    notes: str = None
+    mapped_type: Optional[str] = None
+    wikidata_qid: Optional[str] = None
+    is_approved: Optional[bool] = None
+    notes: Optional[str] = None
 
 class TypeMappingResponse(BaseModel):
     id: int
     wikidata_type: str
-    wikidata_qid: str = None
+    wikidata_qid: Optional[str] = None
     mapped_type: str
     is_approved: bool
-    confidence: float
-    source: str
-    created_by: str
-    notes: str = None
+    confidence: float = 1.0
+    source: str = "manual"
+    created_by: str = "admin"
+    notes: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -52,6 +52,17 @@ class UnmappedTypeInfo(BaseModel):
     type: str
     count: int
     example_qids: List[Dict[str, str]]
+
+class BulkTypeMappingRequest(BaseModel):
+    mappings: List[TypeMappingCreate]
+    fail_on_error: bool = False
+
+class BulkTypeMappingResponse(BaseModel):
+    success: List[Dict[str, Any]]
+    errors: List[Dict[str, Any]]
+    total: int
+    success_count: int
+    error_count: int
 
 # Endpoints
 
@@ -77,7 +88,7 @@ async def create_type_mapping(
     """Create a new type mapping"""
     try:
         # Validate mapped_type
-        valid_types = {"person", "location", "event", "dynasty", "political_entity", "timeline"}
+        valid_types = {"person", "location", "event", "dynasty", "political_entity", "timeline", "other"}
         if mapping_data.mapped_type not in valid_types:
             raise HTTPException(
                 status_code=400,
@@ -117,7 +128,7 @@ async def update_type_mapping(
 
         # Update fields
         if update_data.mapped_type is not None:
-            valid_types = {"person", "location", "event", "dynasty", "political_entity", "timeline"}
+            valid_types = {"person", "location", "event", "dynasty", "political_entity", "timeline", "other"}
             if update_data.mapped_type not in valid_types:
                 raise HTTPException(
                     status_code=400,
@@ -202,6 +213,31 @@ async def get_approved_types():
             "event",
             "dynasty",
             "political_entity",
-            "timeline"
+            "timeline",
+            "other"
         ]
     }
+
+@router.post("/type-mappings/bulk", response_model=BulkTypeMappingResponse)
+async def bulk_create_type_mappings(
+    request: BulkTypeMappingRequest,
+    db: Session = Depends(get_db)
+):
+    """Create multiple type mappings at once"""
+    try:
+        service = TypeFilterService(db)
+
+        # Convert Pydantic models to dicts
+        mappings_data = [mapping.dict() for mapping in request.mappings]
+
+        # Bulk create
+        result = service.bulk_create_type_mappings(
+            mappings_data=mappings_data,
+            fail_on_error=request.fail_on_error
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Failed to bulk create type mappings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

@@ -12,6 +12,7 @@ import { Analytics } from './pages/Analytics'
 import { ExtractionManager } from './pages/ExtractionManager'
 import { SystemStatus } from './pages/SystemStatus'
 import TypeMappings from './pages/TypeMappings'
+import BulkTypeMappingPage from './pages/BulkTypeMappingPage'
 import { NotificationProvider } from './components/common/NotificationProvider'
 import { useWebSocket } from './hooks/useWebSocket'
 import './App.css'
@@ -53,19 +54,21 @@ const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 const AppContent: React.FC = () => {
   return (
     <Router>
-      <MainLayout>
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/entities" element={<EntityManager />} />
-          <Route path="/queues" element={<QueueManager />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/system" element={<SystemStatus />} />
-          <Route path="/extraction" element={<ExtractionManager />} />
-          <Route path="/type-mappings" element={<TypeMappings />} />
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-      </MainLayout>
+      <Routes>
+        {/* Full-screen routes without MainLayout */}
+        <Route path="/type-mappings/bulk-drag-drop" element={<BulkTypeMappingPage />} />
+
+        {/* Routes with MainLayout */}
+        <Route path="/" element={<MainLayout><Navigate to="/dashboard" replace /></MainLayout>} />
+        <Route path="/dashboard" element={<MainLayout><Dashboard /></MainLayout>} />
+        <Route path="/entities" element={<MainLayout><EntityManager /></MainLayout>} />
+        <Route path="/queues" element={<MainLayout><QueueManager /></MainLayout>} />
+        <Route path="/analytics" element={<MainLayout><Analytics /></MainLayout>} />
+        <Route path="/system" element={<MainLayout><SystemStatus /></MainLayout>} />
+        <Route path="/extraction" element={<MainLayout><ExtractionManager /></MainLayout>} />
+        <Route path="/type-mappings" element={<MainLayout><TypeMappings /></MainLayout>} />
+        <Route path="*" element={<MainLayout><Navigate to="/dashboard" replace /></MainLayout>} />
+      </Routes>
     </Router>
   )
 }

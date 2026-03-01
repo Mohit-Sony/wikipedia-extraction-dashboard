@@ -277,6 +277,7 @@ export interface BulkReviewOperation {
   target_queue?: QueueType;
   priority?: Priority;
   notes?: string;
+  filter_by_type?: boolean;  // Enable type filtering for approval
 }
 
 export interface BulkReviewResult {

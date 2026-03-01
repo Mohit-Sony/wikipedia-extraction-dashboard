@@ -17,7 +17,8 @@ import {
   Alert,
   Badge,
   Statistic,
-  Divider
+  Divider,
+  Checkbox
 } from 'antd'
 import {
   CheckOutlined,
@@ -58,6 +59,7 @@ export const ReviewQueue: React.FC = () => {
   const [discoverySourceFilter, setDiscoverySourceFilter] = useState<string | undefined>()
   const [searchTerm, setSearchTerm] = useState('')
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20 })
+  const [enableTypeFilter, setEnableTypeFilter] = useState(false)
 
   const {
     data: reviewData,
@@ -79,21 +81,29 @@ export const ReviewQueue: React.FC = () => {
   const hasSelected = selectedRowKeys.length > 0
 
   const handleBulkApprove = () => {
+    const confirmMessage = enableTypeFilter
+      ? `Are you sure you want to approve ${selectedRowKeys.length} entities?\n\nType filtering is ENABLED - only entities with approved types will be moved to active queue. Entities with unmapped types will be skipped.`
+      : `Are you sure you want to approve ${selectedRowKeys.length} entities and move them to the active queue?`
+
     confirm({
       title: 'Approve Selected Entities',
-      content: `Are you sure you want to approve ${selectedRowKeys.length} entities and move them to the active queue?`,
+      content: confirmMessage,
       onOk: async () => {
         try {
           const result = await bulkApprove({
             operation: 'approve',
             qids: selectedRowKeys as string[],
             target_queue: QueueType.ACTIVE,
-            priority: Priority.MEDIUM
+            priority: Priority.MEDIUM,
+            filter_by_type: enableTypeFilter
           }).unwrap()
 
           message.success(`${result.success_count} entities approved successfully`)
           if (result.error_count > 0) {
             message.warning(`${result.error_count} entities failed to approve`)
+          }
+          if (enableTypeFilter && result.duplicate_count > 0) {
+            message.info(`${result.duplicate_count} entities skipped due to type filtering`)
           }
 
           setSelectedRowKeys([])
@@ -435,25 +445,37 @@ export const ReviewQueue: React.FC = () => {
             </Select>
           </Col>
           <Col span={8}>
-            <Space>
-              <Button
-                type="primary"
-                icon={<CheckOutlined />}
-                onClick={handleBulkApprove}
-                disabled={!hasSelected}
-                loading={approving}
+            <Space direction="vertical" size="small">
+              <Space>
+                <Button
+                  type="primary"
+                  icon={<CheckOutlined />}
+                  onClick={handleBulkApprove}
+                  disabled={!hasSelected}
+                  loading={approving}
+                >
+                  Approve ({selectedRowKeys.length})
+                </Button>
+                <Button
+                  danger
+                  icon={<CloseOutlined />}
+                  onClick={handleBulkReject}
+                  disabled={!hasSelected}
+                  loading={rejecting}
+                >
+                  Reject ({selectedRowKeys.length})
+                </Button>
+              </Space>
+              <Checkbox
+                checked={enableTypeFilter}
+                onChange={(e) => setEnableTypeFilter(e.target.checked)}
               >
-                Approve ({selectedRowKeys.length})
-              </Button>
-              <Button
-                danger
-                icon={<CloseOutlined />}
-                onClick={handleBulkReject}
-                disabled={!hasSelected}
-                loading={rejecting}
-              >
-                Reject ({selectedRowKeys.length})
-              </Button>
+                <Tooltip title="Only approve entities with approved types (person, location, event, dynasty, political_entity, timeline, other). Entities with unmapped types will be skipped.">
+                  <Text style={{ fontSize: 12 }}>
+                    Filter by approved types
+                  </Text>
+                </Tooltip>
+              </Checkbox>
             </Space>
           </Col>
         </Row>

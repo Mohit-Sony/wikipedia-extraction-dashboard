@@ -17,7 +17,8 @@ class TypeFilterService:
         "event",
         "dynasty",
         "political_entity",
-        "timeline"
+        "timeline",
+        "other"
     }
 
     def __init__(self, db: Session):
@@ -114,12 +115,20 @@ class TypeFilterService:
             QueueEntry.queue_type == QueueType.REVIEW.value
         ).all()
 
-        # Count unmapped types
+        # Count unmapped types (types that don't have a mapping in database)
         type_counts = {}
         for entity in review_entities:
-            mapped_type = self.get_type_mapping(entity.type)
-            if mapped_type == "other":
-                # This is an unmapped type
+            # Check if there's an actual mapping in the database
+            mapping = self.db.query(TypeMapping).filter(
+                TypeMapping.wikidata_type == entity.type.lower(),
+                TypeMapping.is_approved == True
+            ).first()
+
+            # Only include if NO mapping exists OR if type is not in APPROVED_TYPES
+            has_no_mapping = mapping is None and entity.type.lower() not in self.APPROVED_TYPES
+
+            if has_no_mapping:
+                # This is truly an unmapped type
                 if entity.type not in type_counts:
                     type_counts[entity.type] = {
                         "type": entity.type,
@@ -233,3 +242,74 @@ class TypeFilterService:
 
         logger.info(f"Deleted type mapping: {mapping.wikidata_type} -> {mapping.mapped_type}")
         return True
+
+    def bulk_create_type_mappings(
+        self,
+        mappings_data: List[Dict],
+        fail_on_error: bool = False
+    ) -> Dict:
+        """
+        Create multiple type mappings at once
+
+        Args:
+            mappings_data: List of dictionaries with mapping data
+            fail_on_error: If True, rollback all on any error (atomic). If False, skip errors.
+
+        Returns:
+            Dictionary with success/error counts and details
+        """
+        results = {
+            "success": [],
+            "errors": [],
+            "total": len(mappings_data),
+            "success_count": 0,
+            "error_count": 0
+        }
+
+        for idx, mapping_data in enumerate(mappings_data):
+            try:
+                # Validate required fields
+                if not mapping_data.get("wikidata_type"):
+                    raise ValueError("wikidata_type is required")
+                if not mapping_data.get("mapped_type"):
+                    raise ValueError("mapped_type is required")
+
+                # Validate mapped_type
+                if mapping_data["mapped_type"] not in self.APPROVED_TYPES:
+                    raise ValueError(f"Invalid mapped_type. Must be one of: {', '.join(self.APPROVED_TYPES)}")
+
+                # Create mapping
+                mapping = self.create_type_mapping(
+                    wikidata_type=mapping_data.get("wikidata_type"),
+                    mapped_type=mapping_data.get("mapped_type"),
+                    wikidata_qid=mapping_data.get("wikidata_qid"),
+                    is_approved=mapping_data.get("is_approved", True),
+                    source=mapping_data.get("source", "bulk_import"),
+                    created_by=mapping_data.get("created_by", "admin"),
+                    notes=mapping_data.get("notes")
+                )
+
+                results["success"].append({
+                    "index": idx,
+                    "wikidata_type": mapping_data.get("wikidata_type"),
+                    "mapped_type": mapping_data.get("mapped_type"),
+                    "id": mapping.id
+                })
+                results["success_count"] += 1
+
+            except Exception as e:
+                error_msg = str(e)
+                results["errors"].append({
+                    "index": idx,
+                    "wikidata_type": mapping_data.get("wikidata_type", "unknown"),
+                    "error": error_msg
+                })
+                results["error_count"] += 1
+
+                if fail_on_error:
+                    self.db.rollback()
+                    logger.error(f"Bulk create failed at index {idx}: {error_msg}")
+                    raise Exception(f"Bulk create failed at row {idx + 1}: {error_msg}")
+
+        logger.info(f"Bulk create completed: {results['success_count']} success, {results['error_count']} errors")
+        return results
