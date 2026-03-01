@@ -21,3 +21,4 @@ test
 .claude/
 .bmad-core/
 tmp
+credentials.json

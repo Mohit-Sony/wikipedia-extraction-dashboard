@@ -49,7 +49,9 @@ async def lifespan(app: FastAPI):
     logger.info("Database initialized")
     
     # Initialize services
-    file_service = FileService()
+    # Use Google Drive by default, pass credentials path
+    credentials_path = os.path.join(os.path.dirname(__file__), "../credentials.json")
+    file_service = FileService(use_google_drive=True, credentials_path=credentials_path)
     app.state.file_service = file_service
     app.state.sync_service = SyncService(file_service)
     

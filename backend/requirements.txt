@@ -45,3 +45,8 @@ mypy>=1.13.0
 
 # Wikipedia Extraction Specific
 wikipedia-api>=0.6.0
+
+# Google Drive Integration
+google-api-python-client>=2.100.0
+google-auth-httplib2>=0.1.1
+google-auth-oauthlib>=1.1.0
