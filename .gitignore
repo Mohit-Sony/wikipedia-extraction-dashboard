@@ -1,4 +1,3 @@
-*.json
 *.csv
 cache
 cache/*
@@ -21,3 +20,4 @@ __pycache__/*
 test
 .claude/
 .bmad-core/
+tmp

@@ -1,0 +1,228 @@
+{
+  "title": "Mahatma Gandhi",
+  "qid": "Q1001",
+  "type": "human",
+  "content": {
+    "extract": "Mohandas Karamchand Gandhi was an Indian lawyer...",
+    "summary": "Indian independence activist"
+  },
+  "metadata": {
+    "page_id": "19379"
+  },
+  "structured_key_data": {
+    "P25": {
+      "label": "mother",
+      "value": {
+        "qid": "Q48438546",
+        "name": "Q48438546",
+        "description": "",
+        "type": ""
+      },
+      "value_type": "wikibase-item"
+    },
+    "P40": {
+      "label": "children",
+      "value": [
+        {
+          "qid": "Q1390715",
+          "name": "Q1390715",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q1280678",
+          "name": "Q1280678",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q185403",
+          "name": "Q185403",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q732728",
+          "name": "Q732728",
+          "description": "",
+          "type": ""
+        }
+      ],
+      "value_type": "array"
+    },
+    "P19": {
+      "label": "place_of_birth",
+      "value": {
+        "qid": "Q6419912",
+        "name": "Q6419912",
+        "description": "",
+        "type": ""
+      },
+      "value_type": "wikibase-item"
+    },
+    "P570": {
+      "label": "date_of_death",
+      "value": {
+        "value": "1948-01-30",
+        "precision": 11,
+        "calendar": "gregorian"
+      },
+      "value_type": "time"
+    },
+    "P22": {
+      "label": "father",
+      "value": {
+        "qid": "Q11735530",
+        "name": "Q11735530",
+        "description": "",
+        "type": ""
+      },
+      "value_type": "wikibase-item"
+    },
+    "P569": {
+      "label": "date_of_birth",
+      "value": {
+        "value": "1869-10-02",
+        "precision": 11,
+        "calendar": "gregorian"
+      },
+      "value_type": "time"
+    },
+    "P106": {
+      "label": "occupation",
+      "value": [
+        {
+          "qid": "Q82955",
+          "name": "Q82955",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q808967",
+          "name": "Q808967",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q15958642",
+          "name": "Q15958642",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q1930187",
+          "name": "Q1930187",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q4964182",
+          "name": "Q4964182",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q18814623",
+          "name": "Q18814623",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q11774202",
+          "name": "Q11774202",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q17351648",
+          "name": "Q17351648",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q1021386",
+          "name": "Q1021386",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q11774156",
+          "name": "Q11774156",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q22336956",
+          "name": "Q22336956",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q16323111",
+          "name": "Q16323111",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q3242115",
+          "name": "Q3242115",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q36180",
+          "name": "Q36180",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q185351",
+          "name": "Q185351",
+          "description": "",
+          "type": ""
+        },
+        {
+          "qid": "Q30242234",
+          "name": "Q30242234",
+          "description": "",
+          "type": ""
+        }
+      ],
+      "value_type": "array"
+    },
+    "P26": {
+      "label": "spouse",
+      "value": [
+        {
+          "qid": "Q264908",
+          "name": "Q264908",
+          "description": "",
+          "type": ""
+        }
+      ],
+      "value_type": "array"
+    },
+    "P20": {
+      "label": "place_of_death",
+      "value": {
+        "qid": "Q1381516",
+        "name": "Q1381516",
+        "description": "",
+        "type": ""
+      },
+      "value_type": "wikibase-item"
+    }
+  },
+  "structured_key_data_extracted": true,
+  "extraction_metadata": {
+    "wikidata_fetch_time": 2.172,
+    "wikidata_properties_extracted": 9,
+    "entity_type_standardized": "person",
+    "relationship_metadata": {
+      "family_connections": 7,
+      "political_connections": 16,
+      "geographic_connections": 2,
+      "total_unique_entities_referenced": 9
+    }
+  }
+}
