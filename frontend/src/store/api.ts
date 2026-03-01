@@ -26,7 +26,8 @@ import type {
   ManualEntityResponse,
   BulkReviewOperation,
   BulkReviewResult,
-  ExtractionSessionStatus
+  ExtractionSessionStatus,
+  TypeMapping
 } from '../types'
 
 export const api = createApi({
@@ -38,7 +39,7 @@ export const api = createApi({
       return headers
     },
   }),
-  tagTypes: ['Entity', 'Queue', 'Analytics', 'Dashboard', 'Extraction', 'DeduplicationStats'],
+  tagTypes: ['Entity', 'Queue', 'Analytics', 'Dashboard', 'Extraction', 'DeduplicationStats', 'TypeMapping'],
   endpoints: (builder) => ({
     // ===== EXISTING ENTITY ENDPOINTS (unchanged) =====
     getEntities: builder.query<EntitiesResponse, EntityFilter>({
@@ -99,6 +100,30 @@ export const api = createApi({
         body: entityData,
       }),
       invalidatesTags: ['Entity', 'Queue', 'Dashboard', 'DeduplicationStats'],
+    }),
+
+    // ===== FIX INVALID COMPLETED ENTITIES =====
+    fixInvalidCompleted: builder.mutation<{
+      status: string;
+      message: string;
+      fixed_count: number;
+      dry_run: boolean;
+      entities: Array<{
+        qid: string;
+        title: string;
+        type: string;
+        num_links: number;
+        num_tables: number;
+        num_images: number;
+        num_chunks: number;
+        page_length: number;
+      }>;
+    }, { dry_run?: boolean }>({
+      query: ({ dry_run = false }) => ({
+        url: `entities/fix-invalid-completed?dry_run=${dry_run}`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Entity', 'Queue', 'Dashboard'],
     }),
 
     // ===== EXISTING QUEUE ENDPOINTS (updated) =====
@@ -189,6 +214,32 @@ export const api = createApi({
     getQueueStats: builder.query<any, void>({
       query: () => 'queues/stats/summary',
       providesTags: ['Queue'],
+    }),
+
+    // ===== NEW TYPE-AWARE QUEUE ENDPOINTS =====
+    getQueueTypeStats: builder.query<{
+      queue_type: string;
+      total: number;
+      mapped_count: number;
+      unmapped_count: number;
+      mapped_types: Record<string, number>;
+      unmapped_types: string[];
+    }, string>({
+      query: (queueType) => `queues/${queueType}/type-stats`,
+      providesTags: ['Queue'],
+    }),
+
+    bulkApproveMappedToActive: builder.mutation<{
+      success_count: number;
+      error_count: number;
+      skipped_count: number;
+      errors: Array<{ qid: string; error: string }>;
+    }, { queue_type: string; priority?: number }>({
+      query: ({ queue_type, priority = 2 }) => ({
+        url: `queues/${queue_type}/bulk-approve-mapped?priority=${priority}`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Queue', 'Entity', 'Dashboard'],
     }),
 
     // ===== NEW REVIEW QUEUE ENDPOINTS =====
@@ -325,6 +376,13 @@ export const api = createApi({
       providesTags: ['DeduplicationStats'],
     }),
 
+    // ===== TYPE MAPPING ENDPOINTS =====
+    getTypeMappings: builder.query<TypeMapping[], { approved_only?: boolean }>({
+      query: ({ approved_only = false } = {}) =>
+        `type-mappings${approved_only ? '?approved_only=true' : ''}`,
+      providesTags: ['TypeMapping'],
+    }),
+
     // ===== EXISTING ANALYTICS ENDPOINTS (unchanged) =====
     getDashboardStats: builder.query<DashboardStats, void>({
       query: () => 'analytics/dashboard',
@@ -417,6 +475,8 @@ export const {
 
   // ===== NEW MANUAL ENTITY HOOK =====
   useAddManualEntityMutation,
+  // ===== FIX INVALID COMPLETED HOOK =====
+  useFixInvalidCompletedMutation,
 
   // ===== EXISTING QUEUE HOOKS (unchanged) =====
   useGetAllQueuesQuery,
@@ -426,6 +486,9 @@ export const {
   useRemoveFromQueueMutation,
   useBatchQueueOperationMutation,
   useGetQueueStatsQuery,
+  // ===== TYPE-AWARE QUEUE HOOKS =====
+  useGetQueueTypeStatsQuery,
+  useBulkApproveMappedToActiveMutation,
 
   // ===== NEW REVIEW QUEUE HOOKS =====
   useGetReviewQueueSourcesQuery,
@@ -446,6 +509,9 @@ export const {
 
   // ===== NEW DEDUPLICATION HOOKS =====
   useGetDeduplicationStatsQuery,
+
+  // ===== TYPE MAPPING HOOKS =====
+  useGetTypeMappingsQuery,
 
   // ===== EXISTING ANALYTICS HOOKS (unchanged) =====
   useGetDashboardStatsQuery,

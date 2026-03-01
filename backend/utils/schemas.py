@@ -73,7 +73,8 @@ class EntityResponse(EntityBase):
     last_modified: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
-    
+    mapped_type: Optional[str] = None
+
     class Config:
         from_attributes = True
 
@@ -81,6 +82,7 @@ class EntityPreview(BaseModel):
     qid: str
     title: str
     type: str
+    mapped_type: str
     content: Dict[str, Any]
     infobox: Dict[str, Any]
     links: Dict[str, Any]

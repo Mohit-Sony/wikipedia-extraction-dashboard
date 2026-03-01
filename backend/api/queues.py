@@ -135,19 +135,40 @@ async def add_to_queue(
     queue_entry: QueueEntryCreate,
     db: Session = Depends(get_db)
 ):
-    """Add entity to a queue with smart deduplication check"""
+    """Add entity to a queue with type validation and smart deduplication check"""
     # Check if entity exists
     entity = db.query(Entity).filter(Entity.qid == queue_entry.qid).first()
     if not entity:
         raise HTTPException(status_code=404, detail="Entity not found")
-    
+
+    # TYPE VALIDATION: Only allow mapped types to go to ACTIVE queue
+    if queue_entry.queue_type == QueueType.ACTIVE:
+        from services.type_filter_service import TypeFilterService
+        type_service = TypeFilterService(db)
+
+        if not type_service.is_approved_type(entity.type):
+            mapped_type = type_service.get_type_mapping(entity.type)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Type '{entity.type}' is not mapped to an approved category. "
+                       f"Current mapping: '{mapped_type}'. "
+                       f"Please add a type mapping before moving to ACTIVE queue."
+            )
+
     # Smart deduplication check
+    # Skip deduplication for manual moves from terminal states (FAILED, REJECTED, COMPLETED)
+    # These states indicate user wants to re-process or change status explicitly
     dedup_service = SmartDeduplicationService(db)
     check_result = dedup_service.check_entity_status(queue_entry.qid, entity.title)
-    
-    if not check_result['should_add'] and queue_entry.queue_type not in [QueueType.REJECTED, QueueType.COMPLETED]:
+
+    # Allow moves to any queue if coming from terminal states (user intentionally re-processing)
+    # Allow moves to terminal states themselves (REJECTED, COMPLETED, FAILED) without dedup check
+    terminal_or_target_states = [QueueType.REJECTED, QueueType.COMPLETED, QueueType.FAILED,
+                                  QueueType.ON_HOLD, QueueType.REVIEW]
+
+    if not check_result['should_add'] and queue_entry.queue_type not in terminal_or_target_states:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail=f"Entity already processed: {check_result['reason']} (status: {check_result['existing_status']})"
         )
     
@@ -292,14 +313,14 @@ async def batch_queue_operation(
                 success, skipped = await _remove_entity_from_queue(qid, db)
             elif operation.operation == "update_priority":
                 success, skipped = await _update_entity_priority(qid, operation.priority, db)
-            elif operation.operation == "approve_review":
+            elif operation.operation == "approve_review" or operation.operation == "approve_to_active":
                 success, skipped = await _move_entity_to_queue_with_validation(
-                    qid, QueueType.ACTIVE, operation.priority, "Approved from review", 
+                    qid, QueueType.ACTIVE, operation.priority, "Approved to active queue",
                     db, context="approval"
                 )
-            elif operation.operation == "reject_review":
+            elif operation.operation == "reject_review" or operation.operation == "reject_to_rejected":
                 success, skipped = await _move_entity_to_queue_with_validation(
-                    qid, QueueType.REJECTED, operation.priority, "Rejected from review", 
+                    qid, QueueType.REJECTED, operation.priority, "Rejected to rejected queue",
                     db, context="approval"
                 )
             else:
@@ -982,5 +1003,210 @@ async def bulk_reject_review_entities(
         db.rollback()
         logger.error(f"Bulk reject failed completely: {e}")
         raise HTTPException(status_code=500, detail=f"Bulk reject operation failed: {str(e)}")
+
+
+@router.post("/queues/{queue_type}/bulk-approve-mapped", response_model=BatchOperationResult)
+async def bulk_approve_mapped_to_active(
+    queue_type: QueueType,
+    priority: Priority = Priority.MEDIUM,
+    db: Session = Depends(get_db)
+):
+    """
+    Bulk move all entities with mapped types from specified queue to ACTIVE queue
+
+    Only entities with approved type mappings will be moved.
+    Returns detailed results including which entities were moved and which were skipped.
+    """
+    try:
+        from services.type_filter_service import TypeFilterService
+
+        # Get all entities in the specified queue
+        queue_entries = db.query(QueueEntry).join(Entity).filter(
+            QueueEntry.queue_type == queue_type.value
+        ).all()
+
+        if not queue_entries:
+            return BatchOperationResult(
+                success_count=0,
+                error_count=0,
+                skipped_count=0,
+                errors=[{"qid": "none", "error": f"No entities found in {queue_type.value} queue"}]
+            )
+
+        # Extract all QIDs and filter out 'other' types
+        type_service = TypeFilterService(db)
+        all_qids = []
+        other_qids = []
+
+        for entry in queue_entries:
+            mapped_type = type_service.get_type_mapping(entry.entity.type)
+            if mapped_type == "other":
+                other_qids.append(entry.qid)
+            else:
+                all_qids.append(entry.qid)
+
+        # Filter by type approval (excluding 'other' which we already filtered)
+        filter_result = type_service.filter_entities_by_approved_types(all_qids)
+
+        results = BatchOperationResult(
+            success_count=0,
+            error_count=0,
+            skipped_count=0,
+            errors=[]
+        )
+
+        # Add 'other' types to skipped
+        for other_qid in other_qids:
+            entity = db.query(Entity).filter(Entity.qid == other_qid).first()
+            results.skipped_count += 1
+            results.errors.append({
+                "qid": other_qid,
+                "error": f"Type '{entity.type}' mapped to 'other' - not eligible for bulk approval"
+            })
+
+        # Log unmapped types that will be skipped
+        if filter_result["rejected"]:
+            for rejected_qid in filter_result["rejected"]:
+                entity = db.query(Entity).filter(Entity.qid == rejected_qid).first()
+                results.skipped_count += 1
+                results.errors.append({
+                    "qid": rejected_qid,
+                    "error": f"Type '{entity.type}' not mapped to approved category"
+                })
+
+        logger.info(f"Bulk approve mapped: {len(filter_result['approved'])} approved, "
+                   f"{len(filter_result['rejected'])} rejected. "
+                   f"Unmapped types: {filter_result.get('unmapped_types', [])}")
+
+        # Move approved entities to ACTIVE queue
+        validation_service = QueueValidationService()
+
+        for qid in filter_result["approved"]:
+            try:
+                # Get the queue entry
+                entry = db.query(QueueEntry).filter(QueueEntry.qid == qid).first()
+
+                if not entry:
+                    results.error_count += 1
+                    results.errors.append({
+                        "qid": qid,
+                        "error": "Queue entry not found"
+                    })
+                    continue
+
+                # Validate the movement
+                validation = validation_service.validate_movement(
+                    from_queue=queue_type,
+                    to_queue=QueueType.ACTIVE,
+                    context="batch_mapped"
+                )
+
+                if not validation.allowed:
+                    results.error_count += 1
+                    results.errors.append({
+                        "qid": qid,
+                        "error": f"Move not allowed: {validation.reason}"
+                    })
+                    continue
+
+                # Move to ACTIVE queue
+                entry.queue_type = QueueType.ACTIVE.value
+                entry.entity.status = "queued"
+                entry.added_date = datetime.utcnow()
+                entry.notes = f"Bulk approved - mapped type from {queue_type.value} queue"
+                entry.priority = priority.value
+
+                # Log the decision
+                decision = UserDecision(
+                    qid=qid,
+                    decision_type="bulk_approve_mapped",
+                    decision_value="moved_to_active",
+                    reasoning=f"Bulk approved - type mapped to approved category from {queue_type.value}"
+                )
+                db.add(decision)
+
+                results.success_count += 1
+
+            except Exception as entity_error:
+                results.error_count += 1
+                results.errors.append({
+                    "qid": qid,
+                    "error": f"Processing failed: {str(entity_error)}"
+                })
+                logger.error(f"Error processing QID {qid}: {entity_error}")
+
+        # Commit all changes
+        db.commit()
+
+        logger.info(f"Bulk approve mapped completed: {results.success_count} moved to active, "
+                   f"{results.error_count} errors, {results.skipped_count} skipped (unmapped types)")
+
+        return results
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Bulk approve mapped failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Bulk approve mapped operation failed: {str(e)}")
+
+
+@router.get("/queues/{queue_type}/type-stats")
+async def get_queue_type_stats(
+    queue_type: QueueType,
+    db: Session = Depends(get_db)
+):
+    """
+    Get statistics about type mappings for entities in a specific queue
+
+    Returns counts of mapped vs unmapped entities and breakdown by categories
+    """
+    try:
+        from services.type_filter_service import TypeFilterService
+
+        # Get all entities in the queue
+        queue_entries = db.query(QueueEntry).join(Entity).filter(
+            QueueEntry.queue_type == queue_type.value
+        ).all()
+
+        if not queue_entries:
+            return {
+                "queue_type": queue_type.value,
+                "total": 0,
+                "mapped_count": 0,
+                "unmapped_count": 0,
+                "mapped_types": {},
+                "unmapped_types": []
+            }
+
+        type_service = TypeFilterService(db)
+
+        mapped_count = 0
+        unmapped_count = 0
+        mapped_types_breakdown = {}
+        unmapped_types_list = set()
+
+        for entry in queue_entries:
+            entity = entry.entity
+            mapped_type = type_service.get_type_mapping(entity.type)
+
+            # Exclude 'other' from mapped count - treat it as unmapped
+            if type_service.is_approved_type(entity.type) and mapped_type != "other":
+                mapped_count += 1
+                mapped_types_breakdown[mapped_type] = mapped_types_breakdown.get(mapped_type, 0) + 1
+            else:
+                unmapped_count += 1
+                unmapped_types_list.add(entity.type)
+
+        return {
+            "queue_type": queue_type.value,
+            "total": len(queue_entries),
+            "mapped_count": mapped_count,
+            "unmapped_count": unmapped_count,
+            "mapped_types": mapped_types_breakdown,
+            "unmapped_types": list(unmapped_types_list)
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get type stats for queue {queue_type.value}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get type statistics: {str(e)}")
 
 

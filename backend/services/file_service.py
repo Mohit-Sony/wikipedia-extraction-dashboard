@@ -109,7 +109,7 @@ class FileService:
         # Get file stats
         stat = file_path.stat()
         file_modified = datetime.fromtimestamp(stat.st_mtime)
-        
+
         # Extract data from JSON structure
         content = data.get('content', {})
         links = data.get('links', {})
@@ -119,7 +119,7 @@ class FileService:
         chunks = data.get('chunks', [])
         metadata = data.get('metadata', {})
         extraction_metadata = data.get('extraction_metadata', {})
-        
+
         # Parse extraction date
         extraction_date = None
         if extraction_metadata.get('timestamp'):
@@ -127,7 +127,7 @@ class FileService:
                 extraction_date = datetime.fromisoformat(extraction_metadata['timestamp'].replace('Z', '+00:00'))
             except:
                 extraction_date = file_modified
-        
+
         # Parse last modified
         last_modified = None
         if metadata.get('last_modified'):
@@ -135,23 +135,42 @@ class FileService:
                 last_modified = datetime.fromisoformat(metadata['last_modified'].replace('Z', '+00:00'))
             except:
                 pass
-        
+
+        # Calculate counts
+        num_links = len(internal_links)
+        num_tables = len(tables)
+        num_images = len(images)
+        num_chunks = len(chunks)
+        page_length = metadata.get('page_length', 0)
+
+        # Validate if extraction has meaningful data
+        # If all counts are 0, the extraction likely failed or returned empty data
+        if num_links == 0 and num_tables == 0 and num_images == 0 and num_chunks == 0 and page_length == 0:
+            status = 'failed'
+            logger.warning(f"Entity {qid} has empty extraction data (all counts are 0)")
+        elif num_chunks == 0 and page_length == 0:
+            # No content at all - definitely failed
+            status = 'failed'
+            logger.warning(f"Entity {qid} has no content (no chunks or page length)")
+        else:
+            status = 'completed'
+
         return {
             'qid': qid,
             'title': data.get('title', ''),
             'type': entity_type,
             'short_desc': content.get('description') or content.get('extract', '')[:200] if content.get('extract') else None,
-            'num_links': len(internal_links),
-            'num_tables': len(tables),
-            'num_images': len(images),
-            'num_chunks': len(chunks),
-            'page_length': metadata.get('page_length', 0),
+            'num_links': num_links,
+            'num_tables': num_tables,
+            'num_images': num_images,
+            'num_chunks': num_chunks,
+            'page_length': page_length,
             'extraction_date': extraction_date,
             'last_modified': last_modified,
             'file_path': str(file_path.relative_to(self.data_dir.parent)),
             'parent_qid': extraction_metadata.get('parent_qid'),
             'depth': extraction_metadata.get('depth', 0),
-            'status': 'completed'  # Files in the directory are considered completed
+            'status': status
         }
     
     def get_entity_preview(self, qid: str, entity_type: str) -> Optional[Dict[str, Any]]:

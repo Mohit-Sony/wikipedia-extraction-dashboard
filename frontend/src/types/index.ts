@@ -6,6 +6,7 @@ export interface Entity {
   qid: string;
   title: string;
   type: string;
+  mapped_type?: string;
   short_desc?: string;
   num_links: number;
   num_tables: number;
@@ -27,6 +28,7 @@ export interface EntityPreview {
   qid: string
   title: string
   type: string
+  mapped_type: string
 
   content: {
     description: string
@@ -270,6 +272,19 @@ export interface ManualEntityResponse {
   existing_status?: string;
 }
 
+// ===== TYPE MAPPING TYPES =====
+export interface TypeMapping {
+  id: number;
+  wikidata_type: string;
+  wikidata_qid?: string;
+  mapped_type: string;
+  is_approved: boolean;
+  confidence: number;
+  source: string;
+  created_by: string;
+  notes?: string;
+}
+
 // ===== NEW BULK OPERATION TYPES =====
 export interface BulkReviewOperation {
   operation: 'approve' | 'reject';
@@ -283,7 +298,7 @@ export interface BulkReviewOperation {
 export interface BulkReviewResult {
   success_count: number;
   error_count: number;
-  duplicate_count: number;
+  skipped_count: number;
   errors: Array<{
     qid: string;
     error: string;

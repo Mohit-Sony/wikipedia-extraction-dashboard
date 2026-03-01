@@ -191,13 +191,31 @@ async def filter_by_type(
         logger.error(f"Failed to filter by type: {e}")
         raise HTTPException(status_code=500, detail="Failed to filter by type")
 
-@router.get("/type-mappings/unmapped", response_model=List[UnmappedTypeInfo])
-async def get_unmapped_types(db: Session = Depends(get_db)):
-    """Get all unmapped types currently in review queue"""
+class UnmappedTypesResponse(BaseModel):
+    types: List[UnmappedTypeInfo]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+@router.get("/type-mappings/unmapped", response_model=UnmappedTypesResponse)
+async def get_unmapped_types(
+    limit: int = 60,
+    offset: int = 0,
+    sort_by: str = "count",
+    sort_order: str = "desc",
+    db: Session = Depends(get_db)
+):
+    """Get all unmapped types currently in review queue with pagination"""
     try:
         service = TypeFilterService(db)
-        unmapped_types = service.get_unmapped_types_in_review_queue()
-        return unmapped_types
+        result = service.get_unmapped_types_in_review_queue(
+            limit=limit,
+            offset=offset,
+            sort_by=sort_by,
+            sort_order=sort_order
+        )
+        return result
 
     except Exception as e:
         logger.error(f"Failed to get unmapped types: {e}")

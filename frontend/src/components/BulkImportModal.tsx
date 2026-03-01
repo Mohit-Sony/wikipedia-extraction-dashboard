@@ -36,6 +36,12 @@ interface ParsedMapping {
   error?: string;
 }
 
+interface UnmappedType {
+  type: string;
+  count: number;
+  example_qids: Array<{ qid: string; title: string }>;
+}
+
 interface BulkImportModalProps {
   approvedTypes: string[];
   onImport: (mappings: ParsedMapping[]) => void;
@@ -50,6 +56,49 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
   const [textInput, setTextInput] = useState('');
   const [parsedMappings, setParsedMappings] = useState<ParsedMapping[]>([]);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [unmappedTypes, setUnmappedTypes] = useState<UnmappedType[]>([]);
+  const [unmappedPage, setUnmappedPage] = useState(1);
+  const [unmappedTotal, setUnmappedTotal] = useState(0);
+  const [loadingUnmapped, setLoadingUnmapped] = useState(false);
+  const unmappedPageSize = 24;
+
+  const fetchUnmappedTypes = async (page: number) => {
+    setLoadingUnmapped(true);
+    try {
+      const offset = (page - 1) * unmappedPageSize;
+      const params = new URLSearchParams({
+        limit: unmappedPageSize.toString(),
+        offset: offset.toString(),
+        sort_by: 'count',
+        sort_order: 'desc'
+      });
+
+      const response = await fetch(`http://localhost:8002/api/v1/type-mappings/unmapped?${params}`);
+      if (!response.ok) throw new Error('Failed to fetch unmapped types');
+      const data = await response.json();
+
+      setUnmappedTypes(data.types);
+      setUnmappedTotal(data.total);
+    } catch (error) {
+      console.error('Failed to fetch unmapped types:', error);
+      message.error('Failed to load unresolved types');
+    } finally {
+      setLoadingUnmapped(false);
+    }
+  };
+
+  const generateUnmappedText = () => {
+    return unmappedTypes.map(unmapped => {
+      const examples = unmapped.example_qids.slice(0, 5).map(ex => ex.title).join(', ');
+      return `${unmapped.type} - ${unmapped.count} - Examples: ${examples}`;
+    }).join('\n');
+  };
+
+  const copyUnmappedToClipboard = () => {
+    const text = generateUnmappedText();
+    navigator.clipboard.writeText(text);
+    message.success('Copied to clipboard');
+  };
 
   const downloadTemplate = () => {
     const csv = `wikidata_type,mapped_type,wikidata_qid,notes
@@ -232,7 +281,14 @@ kingdom,political_entity,,Historical kingdoms`;
 
   return (
     <div>
-      <Tabs defaultActiveKey="csv">
+      <Tabs
+        defaultActiveKey="csv"
+        onChange={(key) => {
+          if (key === 'unresolved' && unmappedTypes.length === 0) {
+            fetchUnmappedTypes(1);
+          }
+        }}
+      >
         <TabPane tab="CSV/TSV Import" key="csv">
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
             <Alert
@@ -296,6 +352,79 @@ kingdom	political_entity	Q417175	Historical states`}
             <Button type="primary" icon={<FileTextOutlined />} onClick={handleTextParse}>
               Parse Text
             </Button>
+          </Space>
+        </TabPane>
+
+        <TabPane tab="Unresolved Types" key="unresolved">
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Alert
+              message="Current unresolved types from review queue"
+              description={
+                <div>
+                  <Paragraph>
+                    These are unmapped types currently in the review queue, sorted by count (highest to lowest).
+                    Format: <Text code>type name - count - Examples: example1, example2, ...</Text>
+                  </Paragraph>
+                  <Paragraph style={{ marginBottom: 0 }}>
+                    You can copy this list and use it as reference for creating mappings.
+                  </Paragraph>
+                </div>
+              }
+              type="info"
+            />
+
+            {unmappedTotal > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text>
+                  Showing {unmappedTypes.length} of {unmappedTotal} types (Page {unmappedPage} of {Math.ceil(unmappedTotal / unmappedPageSize)})
+                </Text>
+                <Space>
+                  <Button
+                    onClick={() => {
+                      const newPage = unmappedPage - 1;
+                      setUnmappedPage(newPage);
+                      fetchUnmappedTypes(newPage);
+                    }}
+                    disabled={unmappedPage === 1 || loadingUnmapped}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      const newPage = unmappedPage + 1;
+                      setUnmappedPage(newPage);
+                      fetchUnmappedTypes(newPage);
+                    }}
+                    disabled={unmappedPage >= Math.ceil(unmappedTotal / unmappedPageSize) || loadingUnmapped}
+                  >
+                    Next
+                  </Button>
+                </Space>
+              </div>
+            )}
+
+            <TextArea
+              rows={12}
+              value={loadingUnmapped ? 'Loading...' : generateUnmappedText()}
+              readOnly
+              style={{ fontFamily: 'monospace', fontSize: '12px' }}
+            />
+
+            <Space>
+              <Button
+                type="primary"
+                onClick={copyUnmappedToClipboard}
+                disabled={unmappedTypes.length === 0 || loadingUnmapped}
+              >
+                Copy to Clipboard
+              </Button>
+              <Button
+                onClick={() => fetchUnmappedTypes(unmappedPage)}
+                loading={loadingUnmapped}
+              >
+                Refresh
+              </Button>
+            </Space>
           </Space>
         </TabPane>
       </Tabs>

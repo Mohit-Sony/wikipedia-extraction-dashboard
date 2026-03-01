@@ -113,13 +113,42 @@ class SmartDeduplicationService:
 
 class ExtractionService:
     """Main extraction service that integrates with dashboard"""
-    
+
     def __init__(self):
         self.current_session: Optional[ExtractionSession] = None
         self.is_running = False
         self.is_paused = False
         self.should_stop = False
         self.websocket_manager = None  # Will be injected
+
+    def _is_extraction_valid(self, extracted_data: Dict[str, Any]) -> tuple[bool, str]:
+        """
+        Validate if extracted data is meaningful and complete
+        Returns: (is_valid, reason)
+        """
+        if not extracted_data:
+            return False, "No data returned from extraction"
+
+        # Extract counts
+        num_links = len(extracted_data.get('links', {}).get('internal_links', []))
+        num_tables = len(extracted_data.get('tables', []))
+        num_images = len(extracted_data.get('images', []))
+        num_chunks = len(extracted_data.get('chunks', []))
+        page_length = extracted_data.get('metadata', {}).get('page_length', 0)
+
+        # Check if all critical fields are zero/empty
+        if num_links == 0 and num_tables == 0 and num_images == 0 and num_chunks == 0 and page_length == 0:
+            return False, "Extraction returned empty data (all counts are 0)"
+
+        # Check if at least we have chunks or page_length (minimum requirement)
+        if num_chunks == 0 and page_length == 0:
+            return False, "No content chunks or page length - extraction incomplete"
+
+        # Additional validation: check if content structure exists
+        if 'content' not in extracted_data and 'chunks' not in extracted_data:
+            return False, "Missing content structure in extracted data"
+
+        return True, "Valid extraction"
         
     def set_websocket_manager(self, manager):
         """Inject WebSocket manager for real-time updates"""
@@ -520,11 +549,18 @@ class ExtractionService:
             # Perform extraction
             extracted_data = await extract_wikipedia_page_optimized(entity_title)
 
-            if not extracted_data:
-                self._log_extraction_event(db, "failed", entity_qid, {"error": "No data returned"})
+            # Validate extracted data
+            is_valid, validation_reason = self._is_extraction_valid(extracted_data)
+
+            if not is_valid:
+                self._log_extraction_event(db, "failed", entity_qid, {
+                    "error": validation_reason,
+                    "extracted_data_available": extracted_data is not None
+                })
                 entity.status = EntityStatus.FAILED.value
                 self._move_entity_to_queue(db, entity, QueueType.FAILED)
                 db.commit()
+                logger.warning(f"Entity {entity_qid} extraction failed validation: {validation_reason}")
                 return False
             
             # Save extracted data to file system

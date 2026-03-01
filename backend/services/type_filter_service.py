@@ -103,12 +103,24 @@ class TypeFilterService:
             "unmapped_types": list(unmapped_types)
         }
 
-    def get_unmapped_types_in_review_queue(self) -> List[Dict]:
+    def get_unmapped_types_in_review_queue(
+        self,
+        limit: int = 60,
+        offset: int = 0,
+        sort_by: str = "count",
+        sort_order: str = "desc"
+    ) -> Dict:
         """
-        Get all unique unmapped types currently in review queue
+        Get all unique unmapped types currently in review queue with pagination
+
+        Args:
+            limit: Number of types to return
+            offset: Offset for pagination
+            sort_by: Field to sort by (count or type)
+            sort_order: Sort order (asc or desc)
 
         Returns:
-            List of dictionaries with type info and count
+            Dictionary with types list and pagination info
         """
         # Get all entities in review queue
         review_entities = self.db.query(Entity).join(QueueEntry).filter(
@@ -142,7 +154,27 @@ class TypeFilterService:
                         "title": entity.title
                     })
 
-        return list(type_counts.values())
+        # Convert to list and sort
+        all_types = list(type_counts.values())
+
+        # Sort by specified field
+        reverse = sort_order.lower() == "desc"
+        if sort_by == "count":
+            all_types.sort(key=lambda x: x["count"], reverse=reverse)
+        elif sort_by == "type":
+            all_types.sort(key=lambda x: x["type"].lower(), reverse=reverse)
+
+        # Apply pagination
+        total = len(all_types)
+        paginated_types = all_types[offset:offset + limit]
+
+        return {
+            "types": paginated_types,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "has_more": offset + limit < total
+        }
 
     def create_type_mapping(
         self,

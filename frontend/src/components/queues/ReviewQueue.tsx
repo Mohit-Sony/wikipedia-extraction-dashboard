@@ -39,7 +39,8 @@ import {
   useGetReviewQueueSourcesQuery,
   useBulkApproveReviewMutation,
   useBulkRejectReviewMutation,
-  useGetDeduplicationStatsQuery
+  useGetDeduplicationStatsQuery,
+  useGetTypeMappingsQuery
 } from '../../store/api'
 import { QueueType, Priority, QueueEntry } from '../../types'
 import { EntityPreviewDrawer } from '../entities/EntityPreviewDrawer'
@@ -51,6 +52,16 @@ dayjs.extend(relativeTime)
 const { Title, Text } = Typography
 const { Option } = Select
 const { confirm } = Modal
+
+// Approved types for filtering (excluding 'other' - we want to filter those out)
+const APPROVED_TYPES = [
+  'person',
+  'location',
+  'event',
+  'dynasty',
+  'political_entity',
+  'timeline'
+]
 
 export const ReviewQueue: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
@@ -74,15 +85,38 @@ export const ReviewQueue: React.FC = () => {
 
   const { data: sourcesData } = useGetReviewQueueSourcesQuery()
   const { data: dedupStats } = useGetDeduplicationStatsQuery()
+  const { data: typeMappings } = useGetTypeMappingsQuery({ approved_only: true })
 
   const [bulkApprove, { isLoading: approving }] = useBulkApproveReviewMutation()
   const [bulkReject, { isLoading: rejecting }] = useBulkRejectReviewMutation()
 
   const hasSelected = selectedRowKeys.length > 0
 
+  // Helper function to check if entity type is approved
+  const isTypeApproved = (entityType: string): boolean => {
+    if (!typeMappings) return APPROVED_TYPES.includes(entityType.toLowerCase())
+
+    // Check if type directly matches approved types
+    if (APPROVED_TYPES.includes(entityType.toLowerCase())) {
+      return true
+    }
+
+    // Check if there's a mapping for this type
+    const mapping = typeMappings.find(
+      m => m.wikidata_type.toLowerCase() === entityType.toLowerCase() && m.is_approved
+    )
+
+    // If mapping exists, check if it maps to an approved type
+    if (mapping) {
+      return APPROVED_TYPES.includes(mapping.mapped_type.toLowerCase())
+    }
+
+    return false
+  }
+
   const handleBulkApprove = () => {
     const confirmMessage = enableTypeFilter
-      ? `Are you sure you want to approve ${selectedRowKeys.length} entities?\n\nType filtering is ENABLED - only entities with approved types will be moved to active queue. Entities with unmapped types will be skipped.`
+      ? `Are you sure you want to approve ${selectedRowKeys.length} entities?\n\nType filtering is ENABLED - only entities with specific types (person, location, event, dynasty, political_entity, timeline) will be moved to active queue. Entities with type 'other' or unmapped types will be skipped.`
       : `Are you sure you want to approve ${selectedRowKeys.length} entities and move them to the active queue?`
 
     confirm({
@@ -102,8 +136,8 @@ export const ReviewQueue: React.FC = () => {
           if (result.error_count > 0) {
             message.warning(`${result.error_count} entities failed to approve`)
           }
-          if (enableTypeFilter && result.duplicate_count > 0) {
-            message.info(`${result.duplicate_count} entities skipped due to type filtering`)
+          if (result.skipped_count > 0) {
+            message.info(`${result.skipped_count} entities skipped${enableTypeFilter ? ' (type not approved)' : ''}`)
           }
 
           setSelectedRowKeys([])
@@ -216,11 +250,18 @@ export const ReviewQueue: React.FC = () => {
     }
   }
 
-  const filteredData = reviewData?.entries.filter(entry =>
-    !searchTerm ||
-    entry.entity.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    entry.entity.qid.toLowerCase().includes(searchTerm.toLowerCase())
-  ) || []
+  const filteredData = reviewData?.entries.filter(entry => {
+    // Search term filter
+    const matchesSearch = !searchTerm ||
+      entry.entity.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      entry.entity.qid.toLowerCase().includes(searchTerm.toLowerCase())
+
+    // Type filter (only when checkbox is enabled)
+    // Uses actual type mappings from backend
+    const matchesType = !enableTypeFilter || isTypeApproved(entry.entity.type)
+
+    return matchesSearch && matchesType
+  }) || []
 
   const columns = [
     {
@@ -415,6 +456,26 @@ export const ReviewQueue: React.FC = () => {
           />
         )}
 
+        {/* Type Filter Info */}
+        {enableTypeFilter && (
+          <Alert
+            message={
+              <Space>
+                <Text strong>Type filtering active:</Text>
+                <Text>
+                  Showing {filteredData.length} of {reviewData?.entries.length || 0} entities with approved types
+                </Text>
+              </Space>
+            }
+            description="Only entities with specific approved types (person, location, event, dynasty, political_entity, timeline) are shown. Entities with type 'other' or unmapped types are filtered out."
+            type="success"
+            showIcon
+            closable
+            onClose={() => setEnableTypeFilter(false)}
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
         {/* Filters and Search */}
         <Row gutter={16} style={{ marginBottom: 16 }}>
           <Col span={8}>
@@ -470,9 +531,9 @@ export const ReviewQueue: React.FC = () => {
                 checked={enableTypeFilter}
                 onChange={(e) => setEnableTypeFilter(e.target.checked)}
               >
-                <Tooltip title="Only approve entities with approved types (person, location, event, dynasty, political_entity, timeline, other). Entities with unmapped types will be skipped.">
+                <Tooltip title="Show and approve only entities with specific types (person, location, event, dynasty, political_entity, timeline). Filters out entities with type 'other' or unmapped types.">
                   <Text style={{ fontSize: 12 }}>
-                    Filter by approved types
+                    Show only approved types {enableTypeFilter && `(${filteredData.length}/${reviewData?.entries.length || 0})`}
                   </Text>
                 </Tooltip>
               </Checkbox>

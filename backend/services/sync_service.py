@@ -60,6 +60,8 @@ class SyncService:
     def _create_entity_from_file(self, db: Session, entity_data: Dict[str, Any]) -> bool:
         """Create new entity in database from file data"""
         try:
+            status = entity_data.get('status', 'completed')
+
             entity = Entity(
                 qid=entity_data['qid'],
                 title=entity_data['title'],
@@ -73,24 +75,31 @@ class SyncService:
                 extraction_date=entity_data.get('extraction_date'),
                 last_modified=entity_data.get('last_modified'),
                 file_path=entity_data['file_path'],
-                status=entity_data.get('status', 'completed'),
+                status=status,
                 parent_qid=entity_data.get('parent_qid'),
                 depth=entity_data.get('depth', 0)
             )
-            
+
             db.add(entity)
-            
-            # Add to completed queue
+
+            # Add to appropriate queue based on status
+            # If extraction failed (empty data), add to FAILED queue, not COMPLETED
+            if status == 'failed':
+                queue_type = QueueType.FAILED
+                logger.info(f"Adding entity {entity_data['qid']} to FAILED queue (empty extraction data)")
+            else:
+                queue_type = QueueType.COMPLETED
+
             queue_entry = QueueEntry(
                 qid=entity_data['qid'],
-                queue_type=QueueType.COMPLETED,
+                queue_type=queue_type,
                 added_by="sync_service",
                 processed_date=entity_data.get('extraction_date', datetime.utcnow())
             )
-            
+
             db.add(queue_entry)
             return True
-            
+
         except Exception as e:
             logger.error(f"Error creating entity {entity_data['qid']}: {e}")
             return False

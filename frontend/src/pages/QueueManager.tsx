@@ -10,13 +10,18 @@ import {
   PlusOutlined,
   UserOutlined,
   GlobalOutlined,
-  TeamOutlined
+  TeamOutlined,
+  WarningOutlined,
+  CheckCircleOutlined
 } from '@ant-design/icons'
 import {
   useGetAllQueuesQuery,
   useGetQueueEntitiesQuery,
   useRemoveFromQueueMutation,
-  useAddToQueueMutation
+  useAddToQueueMutation,
+  useFixInvalidCompletedMutation,
+  useGetQueueTypeStatsQuery,
+  useBulkApproveMappedToActiveMutation
 } from '../store/api'
 import { QueueType, QueueEntry, Priority } from '../types'
 import { EntityPreviewDrawer } from '../components/entities/EntityPreviewDrawer'
@@ -38,6 +43,9 @@ export const QueueManager: React.FC = () => {
   })
   const [removeFromQueue] = useRemoveFromQueueMutation()
   const [addToQueue] = useAddToQueueMutation()
+  const [fixInvalidCompleted, { isLoading: isFixing }] = useFixInvalidCompletedMutation()
+  const { data: typeStats } = useGetQueueTypeStatsQuery(selectedQueue)
+  const [bulkApproveMapped, { isLoading: isBulkApproving }] = useBulkApproveMappedToActiveMutation()
 
   // Update queueTypes array to include review queue:
   const queueTypes = [
@@ -74,6 +82,152 @@ export const QueueManager: React.FC = () => {
     } catch (error) {
       message.error('Failed to move entity')
     }
+  }
+
+  const handleFixInvalidCompleted = async () => {
+    try {
+      // First do a dry run to preview
+      const previewResult = await fixInvalidCompleted({ dry_run: true }).unwrap()
+
+      if (previewResult.entities.length === 0) {
+        message.success('No invalid completed entities found!')
+        return
+      }
+
+      // Show confirmation modal with details
+      Modal.confirm({
+        title: 'Fix Invalid Completed Entities',
+        icon: <WarningOutlined style={{ color: '#faad14' }} />,
+        width: 600,
+        content: (
+          <div>
+            <p>Found <strong>{previewResult.entities.length}</strong> entities marked as "completed" but with no data:</p>
+            <div style={{
+              maxHeight: '300px',
+              overflow: 'auto',
+              marginTop: 16,
+              padding: 12,
+              background: '#fafafa',
+              borderRadius: 4
+            }}>
+              {previewResult.entities.map((entity, idx) => (
+                <div key={entity.qid} style={{ marginBottom: 8 }}>
+                  <Text code>{entity.qid}</Text> - {entity.title} ({entity.type})
+                </div>
+              ))}
+            </div>
+            <p style={{ marginTop: 16 }}>
+              These entities will be:
+            </p>
+            <ul>
+              <li>Status changed: <Tag color="green">completed</Tag> → <Tag color="red">failed</Tag></li>
+              <li>Moved from COMPLETED queue to FAILED queue</li>
+            </ul>
+          </div>
+        ),
+        onOk: async () => {
+          try {
+            const result = await fixInvalidCompleted({ dry_run: false }).unwrap()
+            message.success({
+              content: `Successfully fixed ${result.fixed_count} entities!`,
+              icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+              duration: 5
+            })
+          } catch (error) {
+            message.error('Failed to fix entities')
+          }
+        }
+      })
+    } catch (error) {
+      message.error('Failed to check for invalid entities')
+    }
+  }
+
+  const handleBulkApproveMapped = async () => {
+    if (!typeStats) {
+      message.error('Unable to load type statistics')
+      return
+    }
+
+    if (typeStats.mapped_count === 0) {
+      message.info('No entities with mapped types in this queue')
+      return
+    }
+
+    // Show confirmation modal
+    Modal.confirm({
+      title: 'Send Mapped Entities to Active Queue',
+      icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+      width: 700,
+      content: (
+        <div>
+          <p>This will move <strong>{typeStats.mapped_count}</strong> entities with mapped types to the ACTIVE queue:</p>
+
+          <div style={{ marginTop: 16 }}>
+            <Text strong>Mapped Types Breakdown:</Text>
+            <div style={{
+              marginTop: 8,
+              padding: 12,
+              background: '#f0f9ff',
+              borderRadius: 4,
+              border: '1px solid #91d5ff'
+            }}>
+              {Object.entries(typeStats.mapped_types).map(([type, count]) => (
+                <div key={type} style={{ marginBottom: 4 }}>
+                  <Tag color="blue">{type}</Tag>: {count} entities
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {typeStats.unmapped_count > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <Text type="warning" strong>⚠️ {typeStats.unmapped_count} entities will be skipped (unmapped types):</Text>
+              <div style={{
+                marginTop: 8,
+                padding: 12,
+                background: '#fffbe6',
+                borderRadius: 4,
+                border: '1px solid #ffe58f',
+                maxHeight: '150px',
+                overflow: 'auto'
+              }}>
+                {typeStats.unmapped_types.map((type) => (
+                  <Tag key={type} color="orange" style={{ marginBottom: 4 }}>
+                    {type}
+                  </Tag>
+                ))}
+              </div>
+              <Text type="secondary" style={{ fontSize: 12, marginTop: 8, display: 'block' }}>
+                You can map these types in the Type Mappings page before approving
+              </Text>
+            </div>
+          )}
+        </div>
+      ),
+      okText: `Move ${typeStats.mapped_count} Entities to Active`,
+      okButtonProps: { type: 'primary' },
+      onOk: async () => {
+        try {
+          const result = await bulkApproveMapped({
+            queue_type: selectedQueue,
+            priority: Priority.MEDIUM
+          }).unwrap()
+
+          const successMsg = `Successfully moved ${result.success_count} entities to ACTIVE queue!`
+          const skipMsg = result.skipped_count > 0 ? ` ${result.skipped_count} skipped (unmapped types).` : ''
+          const errorMsg = result.error_count > 0 ? ` ${result.error_count} errors.` : ''
+
+          message.success({
+            content: successMsg + skipMsg + errorMsg,
+            icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+            duration: 6
+          })
+        } catch (error) {
+          message.error('Failed to bulk approve mapped entities')
+        }
+      }
+    })
   }
 
   const getTypeIcon = (type: string) => {
@@ -214,13 +368,38 @@ export const QueueManager: React.FC = () => {
           </Text>
         </Col>
         <Col>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => message.info('Batch operations available in Entity Manager')}
-          >
-            Batch Operations
-          </Button>
+          <Space>
+            {/* Show bulk approve mapped button for queues that can have unmapped types */}
+            {(selectedQueue === QueueType.FAILED ||
+              selectedQueue === QueueType.REVIEW ||
+              selectedQueue === QueueType.REJECTED) &&
+              typeStats && typeStats.mapped_count > 0 && (
+              <Button
+                type="primary"
+                icon={<CheckCircleOutlined />}
+                onClick={handleBulkApproveMapped}
+                loading={isBulkApproving}
+                style={{ background: '#52c41a', borderColor: '#52c41a' }}
+              >
+                Send Mapped to Active ({typeStats.mapped_count})
+              </Button>
+            )}
+            <Button
+              danger
+              icon={<WarningOutlined />}
+              onClick={handleFixInvalidCompleted}
+              loading={isFixing}
+            >
+              Fix Invalid Completed
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => message.info('Batch operations available in Entity Manager')}
+            >
+              Batch Operations
+            </Button>
+          </Space>
         </Col>
       </Row>
 
@@ -240,6 +419,19 @@ export const QueueManager: React.FC = () => {
             <Tag color={queueTypes.find(q => q.key === selectedQueue)?.color}>
               {queueData?.total || 0} entities
             </Tag>
+            {/* Show type mapping stats for relevant queues */}
+            {typeStats && typeStats.total > 0 && (
+              <>
+                <Tag color="green">
+                  {typeStats.mapped_count} Mapped
+                </Tag>
+                {typeStats.unmapped_count > 0 && (
+                  <Tag color="orange">
+                    {typeStats.unmapped_count} Unmapped
+                  </Tag>
+                )}
+              </>
+            )}
           </Space>
         }
         loading={queueLoading}

@@ -36,6 +36,8 @@ async def get_entities(
     db: Session = Depends(get_db)
 ):
     """Get entities with filtering, sorting, and pagination"""
+    from services.type_filter_service import TypeFilterService
+
     try:
         # Build base query
         query = db.query(Entity)
@@ -101,9 +103,17 @@ async def get_entities(
         
         # Apply pagination
         entities = query.offset(offset).limit(limit).all()
-        
+
+        # Add mapped types to entities
+        type_service = TypeFilterService(db)
+        entity_responses = []
+        for entity in entities:
+            entity_response = EntityResponse.from_orm(entity)
+            entity_response.mapped_type = type_service.get_type_mapping(entity.type)
+            entity_responses.append(entity_response)
+
         return {
-            "entities": [EntityResponse.from_orm(entity) for entity in entities],
+            "entities": entity_responses,
             "total": total,
             "limit": limit,
             "offset": offset,
@@ -117,10 +127,16 @@ async def get_entities(
 @router.get("/entities/{qid}", response_model=EntityResponse)
 async def get_entity(qid: str, db: Session = Depends(get_db)):
     """Get a specific entity by QID"""
+    from services.type_filter_service import TypeFilterService
+
     entity = db.query(Entity).filter(Entity.qid == qid).first()
     if not entity:
         raise HTTPException(status_code=404, detail="Entity not found")
-    return EntityResponse.from_orm(entity)
+
+    entity_response = EntityResponse.from_orm(entity)
+    type_service = TypeFilterService(db)
+    entity_response.mapped_type = type_service.get_type_mapping(entity.type)
+    return entity_response
 
 @router.put("/entities/{qid}", response_model=EntityResponse)
 async def update_entity(qid: str, entity_update: EntityUpdate, db: Session = Depends(get_db)):
@@ -144,6 +160,8 @@ async def update_entity(qid: str, entity_update: EntityUpdate, db: Session = Dep
 @router.get("/entities/{qid}/preview")
 async def get_entity_preview(qid: str, db: Session = Depends(get_db)):
     """Get enhanced entity preview with comprehensive data matching frontend EntityPreview interface"""
+    from services.type_filter_service import TypeFilterService
+
     # Get entity from database
     entity = db.query(Entity).filter(Entity.qid == qid).first()
     if not entity:
@@ -181,12 +199,17 @@ async def get_entity_preview(qid: str, db: Session = Depends(get_db)):
         "priority": queue_entry.priority if queue_entry else None,
         "notes": queue_entry.notes if queue_entry else None
     }
-    
+
+    # Get mapped type
+    type_service = TypeFilterService(db)
+    mapped_type = type_service.get_type_mapping(entity.type)
+
     # Build response matching exact frontend interface structure
     preview_response = {
         "qid": qid,
         "title": entity_data.get('title', ''),
         "type": entity.type,
+        "mapped_type": mapped_type,
         
         # Content structure - exactly matching frontend interface
         "content": {
@@ -376,10 +399,114 @@ async def get_search_suggestions(
     suggestions = db.query(Entity.qid, Entity.title, Entity.type).filter(
         Entity.title.ilike(f"%{query}%")
     ).limit(limit).all()
-    
+
     return {
         "suggestions": [
             {"qid": s.qid, "title": s.title, "type": s.type}
             for s in suggestions
         ]
     }
+
+@router.post("/entities/fix-invalid-completed")
+async def fix_invalid_completed_entities(
+    dry_run: bool = Query(False, description="Preview changes without applying them"),
+    db: Session = Depends(get_db)
+):
+    """
+    Fix entities that are marked as 'completed' but have no actual data.
+
+    This identifies entities where:
+    - Status is 'completed'
+    - Queue type is 'completed'
+    - All data counts are 0 (num_links, num_tables, num_images, num_chunks, page_length)
+
+    These entities will be:
+    - Status changed to 'failed'
+    - Moved from COMPLETED queue to FAILED queue
+    """
+    try:
+        # Find all invalid completed entities
+        # Join Entity with QueueEntry to filter by queue_type
+        invalid_entities = db.query(Entity).join(
+            QueueEntry, Entity.qid == QueueEntry.qid
+        ).filter(
+            and_(
+                Entity.status == EntityStatus.COMPLETED.value,
+                QueueEntry.queue_type == QueueType.COMPLETED.value,
+                Entity.num_links == 0,
+                Entity.num_tables == 0,
+                Entity.num_images == 0,
+                Entity.num_chunks == 0,
+                Entity.page_length == 0
+            )
+        ).all()
+
+        if not invalid_entities:
+            return {
+                "status": "success",
+                "message": "No invalid completed entities found",
+                "fixed_count": 0,
+                "dry_run": dry_run,
+                "entities": []
+            }
+
+        # Prepare entity details
+        entity_details = [
+            {
+                "qid": entity.qid,
+                "title": entity.title,
+                "type": entity.type,
+                "num_links": entity.num_links,
+                "num_tables": entity.num_tables,
+                "num_images": entity.num_images,
+                "num_chunks": entity.num_chunks,
+                "page_length": entity.page_length
+            }
+            for entity in invalid_entities
+        ]
+
+        if dry_run:
+            return {
+                "status": "preview",
+                "message": f"Found {len(invalid_entities)} invalid completed entities (DRY RUN)",
+                "would_fix_count": len(invalid_entities),
+                "dry_run": True,
+                "entities": entity_details
+            }
+
+        # Actually fix the entities
+        fixed_count = 0
+        for entity in invalid_entities:
+            try:
+                # Update entity status
+                entity.status = EntityStatus.FAILED.value
+
+                # Update queue entry
+                queue_entry = db.query(QueueEntry).filter(
+                    QueueEntry.qid == entity.qid
+                ).first()
+
+                if queue_entry:
+                    queue_entry.queue_type = QueueType.FAILED.value
+                    logger.info(f"Fixed entity {entity.qid}: moved from COMPLETED to FAILED (empty data)")
+                    fixed_count += 1
+
+            except Exception as e:
+                logger.error(f"Error fixing entity {entity.qid}: {e}")
+                continue
+
+        # Commit all changes
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": f"Successfully fixed {fixed_count} invalid completed entities",
+            "fixed_count": fixed_count,
+            "dry_run": False,
+            "entities": entity_details
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error fixing invalid completed entities: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fix entities: {str(e)}")

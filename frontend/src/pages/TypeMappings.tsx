@@ -58,6 +58,14 @@ interface UnmappedType {
   example_qids: Array<{ qid: string; title: string }>;
 }
 
+interface UnmappedTypesResponse {
+  types: UnmappedType[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+}
+
 const APPROVED_TYPES = [
   'person',
   'location',
@@ -72,7 +80,10 @@ const TypeMappings: React.FC = () => {
   const navigate = useNavigate();
   const [mappings, setMappings] = useState<TypeMapping[]>([]);
   const [unmappedTypes, setUnmappedTypes] = useState<UnmappedType[]>([]);
+  const [unmappedTotal, setUnmappedTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [unmappedPage, setUnmappedPage] = useState(1);
+  const [unmappedPageSize, setUnmappedPageSize] = useState(60);
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [isBulkModalVisible, setIsBulkModalVisible] = useState(false);
   const [bulkMappings, setBulkMappings] = useState<any[]>([]);
@@ -98,6 +109,10 @@ const TypeMappings: React.FC = () => {
     fetchUnmappedTypes();
   }, []);
 
+  useEffect(() => {
+    fetchUnmappedTypes(unmappedPage);
+  }, [unmappedPage]);
+
   const fetchMappings = async () => {
     try {
       const response = await fetch('http://localhost:8002/api/v1/type-mappings');
@@ -111,12 +126,22 @@ const TypeMappings: React.FC = () => {
     }
   };
 
-  const fetchUnmappedTypes = async () => {
+  const fetchUnmappedTypes = async (page: number = unmappedPage) => {
     try {
-      const response = await fetch('http://localhost:8002/api/v1/type-mappings/unmapped');
+      const offset = (page - 1) * unmappedPageSize;
+      const params = new URLSearchParams({
+        limit: unmappedPageSize.toString(),
+        offset: offset.toString(),
+        sort_by: 'count',
+        sort_order: 'desc'
+      });
+
+      const response = await fetch(`http://localhost:8002/api/v1/type-mappings/unmapped?${params}`);
       if (!response.ok) throw new Error('Failed to fetch unmapped types');
-      const data = await response.json();
-      setUnmappedTypes(data);
+      const data: UnmappedTypesResponse = await response.json();
+
+      setUnmappedTypes(data.types);
+      setUnmappedTotal(data.total);
     } catch (error) {
       console.error('Failed to fetch unmapped types:', error);
     }
@@ -458,12 +483,12 @@ const TypeMappings: React.FC = () => {
       </div>
 
       {/* Unmapped Types Section */}
-      {unmappedTypes.length > 0 && (
+      {unmappedTotal > 0 && (
         <Card
           title={
             <Space>
               <ExclamationCircleOutlined style={{ color: '#faad14' }} />
-              <span>Unmapped Types in Review Queue ({unmappedTypes.length})</span>
+              <span>Unmapped Types in Review Queue ({unmappedTotal})</span>
               {isMultiSelectMode && Object.keys(multiSelectMappings).length > 0 && (
                 <Badge
                   count={Object.keys(multiSelectMappings).length}
@@ -591,6 +616,28 @@ const TypeMappings: React.FC = () => {
               );
             })}
           </Row>
+          {unmappedTotal > unmappedPageSize && (
+            <div style={{ marginTop: 16, textAlign: 'center' }}>
+              <Space>
+                <Button
+                  onClick={() => setUnmappedPage(unmappedPage - 1)}
+                  disabled={unmappedPage === 1}
+                >
+                  Previous
+                </Button>
+                <Text>
+                  Page {unmappedPage} of {Math.ceil(unmappedTotal / unmappedPageSize)}
+                  {' '}(Showing {unmappedTypes.length} of {unmappedTotal})
+                </Text>
+                <Button
+                  onClick={() => setUnmappedPage(unmappedPage + 1)}
+                  disabled={unmappedPage >= Math.ceil(unmappedTotal / unmappedPageSize)}
+                >
+                  Next
+                </Button>
+              </Space>
+            </div>
+          )}
         </Card>
       )}
 
