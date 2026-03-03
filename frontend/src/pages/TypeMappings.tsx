@@ -16,18 +16,15 @@ import {
   Row,
   Col,
   Divider,
-  Tooltip,
   Badge,
   Tabs,
-  Checkbox,
-  Progress
+  Checkbox
 } from 'antd';
 import {
   PlusOutlined,
   DeleteOutlined,
   SaveOutlined,
   ExclamationCircleOutlined,
-  FilterOutlined,
   AppstoreAddOutlined,
   TableOutlined,
   DragOutlined
@@ -83,7 +80,7 @@ const TypeMappings: React.FC = () => {
   const [unmappedTotal, setUnmappedTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [unmappedPage, setUnmappedPage] = useState(1);
-  const [unmappedPageSize, setUnmappedPageSize] = useState(60);
+  const unmappedPageSize = 60;
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [isBulkModalVisible, setIsBulkModalVisible] = useState(false);
   const [bulkMappings, setBulkMappings] = useState<any[]>([]);

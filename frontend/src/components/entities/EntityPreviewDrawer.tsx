@@ -2,16 +2,15 @@
 import React, { useState } from 'react'
 import {
   Drawer, Spin, Alert, Typography, Descriptions, Tag, Card, Row, Col, Space,
-  Tabs, Table, Image, Collapse, List, Button, Tooltip, Badge, Divider,
-  Timeline, Progress, Avatar, Empty, Statistic
+  Tabs, Table, Image, Collapse, List, Button, Tooltip, Badge, Empty, Statistic, Avatar
 } from 'antd'
 import {
   InfoCircleOutlined, LinkOutlined, TableOutlined, PictureOutlined,
-  BookOutlined, TagOutlined, FileTextOutlined, BranchesOutlined,
+  BookOutlined, FileTextOutlined, BranchesOutlined,
   EyeOutlined, CopyOutlined, ClockCircleOutlined,
-  CodeOutlined, TeamOutlined, GlobalOutlined, UserOutlined,
-  BarChartOutlined, FolderOutlined, HistoryOutlined, DatabaseOutlined,
-  NodeIndexOutlined, FileSearchOutlined, TagsOutlined
+  TeamOutlined, GlobalOutlined, UserOutlined,
+  HistoryOutlined, DatabaseOutlined,
+  NodeIndexOutlined, FileSearchOutlined
 } from '@ant-design/icons'
 import { useGetEntityPreviewQuery } from '../../store/api'
 import dayjs from 'dayjs'

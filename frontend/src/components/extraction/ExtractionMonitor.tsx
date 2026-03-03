@@ -1,14 +1,10 @@
 // src/components/extraction/ExtractionMonitor.tsx
 import React, { useState } from 'react'
-import { 
-  Card, 
-  Progress, 
-  Statistic, 
-  Typography, 
-  Row, 
-  Col, 
-  Tag, 
-  Space, 
+import {
+  Card,
+  Typography,
+  Tag,
+  Space,
   Timeline,
   Descriptions,
   Alert,
@@ -21,7 +17,6 @@ import {
   PlayCircleOutlined,
   PauseCircleOutlined,
   StopOutlined,
-  ClockCircleOutlined,
   DatabaseOutlined,
   LinkOutlined,
   CheckCircleOutlined,
@@ -29,10 +24,9 @@ import {
   InfoCircleOutlined,
   EyeOutlined
 } from '@ant-design/icons'
-import { 
-  useGetExtractionStatusQuery, 
-  useGetSessionLogsQuery,
-  useGetDeduplicationStatsQuery 
+import {
+  useGetExtractionStatusQuery,
+  useGetSessionLogsQuery
 } from '../../store/api'
 import { ExtractionStatus } from '../../types'
 import dayjs from 'dayjs'
@@ -47,19 +41,17 @@ const { Title, Text } = Typography
 export const ExtractionMonitor: React.FC = () => {
   const [logsModalOpen, setLogsModalOpen] = useState(false)
   
-  const { 
-    data: statusData, 
+  const {
+    data: statusData,
     isLoading: statusLoading,
-    refetch: refetchStatus 
+    refetch: refetchStatus
   } = useGetExtractionStatusQuery(undefined, {
     pollingInterval: 2000, // Poll every 2 seconds for real-time updates
   })
-  
-  const { data: dedupStats } = useGetDeduplicationStatsQuery()
-  
-  const { 
-    data: logsData, 
-    isLoading: logsLoading 
+
+  const {
+    data: logsData,
+    isLoading: logsLoading
   } = useGetSessionLogsQuery(
     { session_id: statusData?.session_id || 0 },
     { skip: !statusData?.failed_entities }

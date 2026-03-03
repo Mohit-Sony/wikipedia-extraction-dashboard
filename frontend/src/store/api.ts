@@ -9,7 +9,6 @@ import type {
   BatchOperation,
   BatchOperationResult,
   DashboardStats,
-  AnalyticsData,
   SearchSuggestion,
   EntityFilter,
   QueueType,
@@ -17,9 +16,7 @@ import type {
   // NEW TYPES
   ExtractionConfig,
   ExtractionSession,
-  ExtractionProgress,
   ExtractionLog,
-  ExtractionStatus,
   DeduplicationStats,
   DiscoverySource,
   ManualEntityRequest,
@@ -63,7 +60,7 @@ export const api = createApi({
 
     getEntity: builder.query<Entity, string>({
       query: (qid) => `entities/${qid}`,
-      providesTags: (result, error, qid) => [{ type: 'Entity', id: qid }],
+      providesTags: (_result, _error, qid) => [{ type: 'Entity', id: qid }],
     }),
 
     updateEntity: builder.mutation<Entity, { qid: string; data: Partial<Entity> }>({
@@ -72,7 +69,7 @@ export const api = createApi({
         method: 'PUT',
         body: data,
       }),
-      invalidatesTags: (result, error, { qid }) => [
+      invalidatesTags: (_result, _error, { qid }) => [
         { type: 'Entity', id: qid },
         'Entity',
         'Queue',

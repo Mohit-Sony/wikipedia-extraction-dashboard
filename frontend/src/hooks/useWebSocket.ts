@@ -37,8 +37,8 @@ const PING_INTERVAL = 30000 // 30 seconds
 export const useWebSocket = () => {
   const dispatch = useDispatch()
   const wsRef = useRef<WebSocket | null>(null)
-  const reconnectTimeoutRef = useRef<number | null>(null)
-  const pingIntervalRef = useRef<number | null>(null)
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   
   const connected = useSelector(selectWebSocketConnected)
   const connecting = useSelector(selectWebSocketConnecting)

@@ -176,9 +176,6 @@ export const DiscoverySourceFilter: React.FC<DiscoverySourceFilterProps> = ({
                         <div style={{ marginBottom: 4 }}>
                           {getSourceDescription(source.source)}
                         </div>
-                        <div style={{ fontSize: 12 }}>
-                          Last discovery: {dayjs(source.last_discovery).fromNow()}
-                        </div>
                       </div>
                     }
                   >

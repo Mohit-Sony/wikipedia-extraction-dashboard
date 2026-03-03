@@ -36,7 +36,7 @@ export const QueueManager: React.FC = () => {
   const [previewDrawerOpen, setPreviewDrawerOpen] = useState(false)
   const [previewEntityQid, setPreviewEntityQid] = useState<string | null>(null)
 
-  const { data: allQueues, isLoading: queuesLoading } = useGetAllQueuesQuery()
+  const { data: allQueues } = useGetAllQueuesQuery()
   const { data: queueData, isLoading: queueLoading } = useGetQueueEntitiesQuery({
     queue_type: selectedQueue,
     limit: 50
@@ -110,7 +110,7 @@ export const QueueManager: React.FC = () => {
               background: '#fafafa',
               borderRadius: 4
             }}>
-              {previewResult.entities.map((entity, idx) => (
+              {previewResult.entities.map((entity) => (
                 <div key={entity.qid} style={{ marginBottom: 8 }}>
                   <Text code>{entity.qid}</Text> - {entity.title} ({entity.type})
                 </div>

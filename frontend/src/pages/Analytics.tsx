@@ -2,16 +2,12 @@
 // src/pages/Analytics.tsx
 import React, { useState } from 'react'
 import { Row, Col, Card, Typography, Select, Spin, Empty, Statistic, Progress } from 'antd'
-import { 
-  BarChartOutlined, 
-  LineChartOutlined, 
-  PieChartOutlined,
-  TrophyOutlined,
-  FundOutlined
+import {
+  TrophyOutlined
 } from '@ant-design/icons'
-import { 
-  LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+import {
+  BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
 import {
   useGetExtractionTrendsQuery,
@@ -195,7 +191,7 @@ export const Analytics: React.FC = () => {
                   nameKey="type"
                   label={({ type, percent }) => `${type} (${(percent * 100).toFixed(0)}%)`}
                 >
-                  {(typeAnalysis?.type_analysis || []).map((entry: any, index: number) => (
+                  {(typeAnalysis?.type_analysis || []).map((_entry: any, index: number) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>

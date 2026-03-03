@@ -246,11 +246,8 @@ export interface DeduplicationStats {
 }
 
 export interface DiscoverySource {
-  type: string;
-  discovered_count: number;
-  last_discovery: string;
-  qid: string;
-  title: string;
+  source: string;
+  count: number;
 }
 
 // ===== NEW MANUAL ENTITY TYPES =====

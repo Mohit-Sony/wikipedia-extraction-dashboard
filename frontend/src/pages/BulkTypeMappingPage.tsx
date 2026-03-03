@@ -10,14 +10,11 @@ import {
   Space,
   Typography,
   Input,
-  Tag,
   Badge,
-  Tooltip,
   message,
   Modal,
   Statistic,
   Progress,
-  Divider,
   Alert
 } from 'antd';
 import {
@@ -77,7 +74,7 @@ const ITEM_TYPE = 'TYPE_CARD';
 // Draggable Type Card Component
 const DraggableTypeCard: React.FC<{
   item: MappingItem;
-  isAssigned?: boolean;
+  isAssigned?: string;
   onRemove?: () => void;
 }> = ({ item, isAssigned, onRemove }) => {
   const [{ isDragging }, drag] = useDrag(() => ({
@@ -96,7 +93,7 @@ const DraggableTypeCard: React.FC<{
         marginBottom: 8,
         cursor: 'move',
         opacity: isDragging ? 0.5 : 1,
-        borderLeft: isAssigned ? `4px solid ${TYPE_COLORS[isAssigned]}` : undefined,
+        borderLeft: isAssigned ? `4px solid ${TYPE_COLORS[isAssigned] || '#ccc'}` : undefined,
       }}
       hoverable
     >

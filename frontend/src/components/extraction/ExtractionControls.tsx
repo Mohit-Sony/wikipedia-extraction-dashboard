@@ -31,7 +31,6 @@ import {
   CheckCircleOutlined,
   ExclamationCircleOutlined,
   ClockCircleOutlined,
-  DatabaseOutlined,
   TeamOutlined
 } from '@ant-design/icons'
 import {
@@ -42,7 +41,6 @@ import {
   usePauseExtractionMutation,
   useResumeExtractionMutation,
   useCancelExtractionMutation,
-  useGetQueueEntitiesQuery,
   useGetAllQueuesQuery
 } from '../../store/api'
 import { ExtractionStatus, QueueType } from '../../types'
@@ -90,7 +88,7 @@ export const ExtractionControls: React.FC = () => {
   const [sessionName, setSessionName] = useState('')
 
   // API Hooks
-  const { data: statusData, refetch: refetchStatus } = useGetExtractionStatusQuery()
+  const { data: statusData } = useGetExtractionStatusQuery()
   const { data: configData } = useGetExtractionConfigQuery()
   const { data: allQueuesData } = useGetAllQueuesQuery()
 

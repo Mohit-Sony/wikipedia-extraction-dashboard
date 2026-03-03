@@ -14,7 +14,6 @@ import { ExtractionMonitor } from '../components/extraction/ExtractionMonitor'
 import { ExtractionControls } from '../components/extraction/ExtractionControls'
 import { ManualEntityEntry } from '../components/extraction/ManualEntityEntry'
 import { ReviewQueue } from '../components/queues/ReviewQueue'
-import { DiscoverySourceFilter } from '../components/queues/DiscoverySourceFilter'
 import {
   useGetExtractionStatusQuery,
   useGetQueueEntitiesQuery,
@@ -27,7 +26,6 @@ const { TabPane } = Tabs
 
 export const ExtractionManager: React.FC = () => {
   const [activeTab, setActiveTab] = useState('monitor')
-  const [discoverySourceFilter, setDiscoverySourceFilter] = useState<string | undefined>()
 
   const { data: extractionStatus, refetch: refetchStatus } = useGetExtractionStatusQuery()
   const { data: reviewQueueData } = useGetQueueEntitiesQuery({
