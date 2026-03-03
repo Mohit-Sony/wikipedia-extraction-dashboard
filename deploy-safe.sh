@@ -200,6 +200,53 @@ fi
 
 echo -e "${GREEN}✓ Backend files validated${NC}"
 
+# Generate ecosystem.config.js with absolute paths
+PROJECT_ROOT=$(pwd)
+echo -e "${BLUE}Generating PM2 config with absolute paths...${NC}"
+cat > ecosystem.config.js << EOF
+module.exports = {
+  apps: [
+    {
+      name: 'wikipedia-backend',
+      script: 'main.py',
+      cwd: '${PROJECT_ROOT}/backend',
+      interpreter: '${PROJECT_ROOT}/backend/venv/bin/python',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '1G',
+      env: {
+        NODE_ENV: 'production',
+        PYTHONUNBUFFERED: '1'
+      },
+      error_file: '${PROJECT_ROOT}/logs/backend-error.log',
+      out_file: '${PROJECT_ROOT}/logs/backend-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true
+    },
+    {
+      name: 'wikipedia-frontend',
+      script: 'npx',
+      args: 'serve -s dist -l 5173',
+      cwd: '${PROJECT_ROOT}/frontend',
+      interpreter: 'none',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '500M',
+      env: {
+        NODE_ENV: 'production'
+      },
+      error_file: '${PROJECT_ROOT}/logs/frontend-error.log',
+      out_file: '${PROJECT_ROOT}/logs/frontend-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true
+    }
+  ]
+};
+EOF
+echo -e "${GREEN}✓ PM2 config generated${NC}"
+
 # Stop and delete existing PM2 processes to ensure clean start
 echo -e "${BLUE}Stopping existing PM2 processes...${NC}"
 pm2 delete ecosystem.config.js 2>/dev/null || true
