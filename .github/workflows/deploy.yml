@@ -1,0 +1,67 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.0
+        env:
+          BACKEND_PORT: ${{ secrets.BACKEND_PORT || '8000' }}
+          FRONTEND_PORT: ${{ secrets.FRONTEND_PORT || '5173' }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_SSH_PORT || '22' }}
+          envs: BACKEND_PORT,FRONTEND_PORT
+          script: |
+            echo "🚀 Starting deployment..."
+
+            # Navigate to project directory
+            cd ~/wikipedia-dashboard || {
+              echo "❌ Project directory not found. Cloning repository..."
+              cd ~
+              git clone ${{ github.server_url }}/${{ github.repository }}.git wikipedia-dashboard
+              cd wikipedia-dashboard
+            }
+
+            # Pull latest changes
+            echo "📦 Pulling latest changes from GitHub..."
+            git fetch origin
+            git reset --hard origin/master
+
+            # Run deployment script
+            echo "🔧 Running deployment script..."
+            chmod +x deploy.sh
+            ./deploy.sh
+
+            echo "✅ Deployment completed successfully!"
+
+      - name: Verify Deployment
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_SSH_PORT || '22' }}
+          script: |
+            echo "🔍 Checking service status..."
+            cd ~/wikipedia-dashboard
+            pm2 status
+
+            echo ""
+            echo "📊 Application URLs:"
+            echo "Backend: http://${{ secrets.EC2_HOST }}:${BACKEND_PORT:-8000}"
+            echo "Frontend: http://${{ secrets.EC2_HOST }}:${FRONTEND_PORT:-5173}"
