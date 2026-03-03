@@ -186,27 +186,58 @@ cd ..
 # ==========================
 echo -e "\n${BLUE}🔄 Managing PM2 processes...${NC}"
 
-# Check if processes are already running
-if pm2 list | grep -q "wikipedia-backend\|wikipedia-frontend"; then
-    echo -e "${YELLOW}Reloading existing PM2 processes...${NC}"
-    if pm2 reload ecosystem.config.js; then
-        echo -e "${GREEN}✓ PM2 processes reloaded${NC}"
-    else
-        echo -e "${YELLOW}Reload failed, trying restart...${NC}"
-        pm2 restart ecosystem.config.js
-    fi
+# Validate backend setup before starting PM2
+echo -e "${BLUE}Validating backend setup...${NC}"
+if [ ! -f "backend/main.py" ]; then
+    handle_error "Backend main.py not found"
+    exit 1
+fi
+
+if [ ! -f "backend/venv/bin/python" ]; then
+    handle_error "Python virtual environment not found at backend/venv/bin/python"
+    exit 1
+fi
+
+echo -e "${GREEN}✓ Backend files validated${NC}"
+
+# Stop and delete existing PM2 processes to ensure clean start
+echo -e "${BLUE}Stopping existing PM2 processes...${NC}"
+pm2 delete ecosystem.config.js 2>/dev/null || true
+
+# Start PM2 processes
+echo -e "${GREEN}Starting PM2 processes...${NC}"
+if pm2 start ecosystem.config.js; then
+    echo -e "${GREEN}✓ PM2 processes started${NC}"
 else
-    echo -e "${GREEN}Starting PM2 processes...${NC}"
-    if pm2 start ecosystem.config.js; then
-        echo -e "${GREEN}✓ PM2 processes started${NC}"
-    else
-        handle_error "Failed to start PM2 processes"
-        exit 1
-    fi
+    handle_error "Failed to start PM2 processes"
+    exit 1
 fi
 
 # Save PM2 configuration
 pm2 save
+
+# Verify both processes are running
+echo -e "\n${BLUE}Verifying PM2 processes...${NC}"
+sleep 2
+
+if ! pm2 list | grep -q "wikipedia-backend.*online"; then
+    echo -e "${RED}✗ Backend process failed to start${NC}"
+    echo -e "${YELLOW}Backend logs:${NC}"
+    pm2 logs wikipedia-backend --lines 20 --nostream
+    handle_error "Backend process not running"
+    exit 1
+fi
+
+if ! pm2 list | grep -q "wikipedia-frontend.*online"; then
+    echo -e "${RED}✗ Frontend process failed to start${NC}"
+    echo -e "${YELLOW}Frontend logs:${NC}"
+    pm2 logs wikipedia-frontend --lines 20 --nostream
+    handle_error "Frontend process not running"
+    exit 1
+fi
+
+echo -e "${GREEN}✓ Both processes are running${NC}"
+pm2 list
 
 # Setup PM2 startup script (only if not already configured)
 echo -e "${YELLOW}Checking PM2 startup configuration...${NC}"
