@@ -2,10 +2,9 @@ module.exports = {
   apps: [
     {
       name: 'wikipedia-backend',
-      script: 'venv/bin/python',
-      args: 'main.py',
+      script: 'main.py',
       cwd: './backend',
-      interpreter: 'none',
+      interpreter: './venv/bin/python',
       instances: 1,
       autorestart: true,
       watch: false,
