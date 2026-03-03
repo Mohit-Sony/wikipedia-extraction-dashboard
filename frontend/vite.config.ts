@@ -19,6 +19,7 @@ export default defineConfig({
   server: {
     host: true,
     port: 3000,
+    allowedHosts: ['ec2-98-89-37-169.compute-1.amazonaws.com', '.compute-1.amazonaws.com', '98.89.37.169'],
     proxy: {
       '/api': {
         target: 'http://localhost:8002',
