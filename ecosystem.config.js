@@ -1,18 +1,18 @@
 module.exports = {
   apps: [
-    {
+        {
       name: 'wikipedia-backend',
 
-      // Use uvicorn from venv directly
-      script: './venv/bin/uvicorn',
-      args: 'main:app --host 0.0.0.0 --port 8000',
-
+      script: 'main.py',
       cwd: './backend',
 
+      interpreter: './venv/bin/python',
+
+      exec_mode: 'fork',
       instances: 1,
-      exec_mode: 'fork',   // IMPORTANT for Python apps
       autorestart: true,
       watch: false,
+
       max_memory_restart: '1G',
 
       env: {
