@@ -28,7 +28,7 @@ module.exports = {
     {
       name: 'wikipedia-frontend',
       script: 'npx',
-      args: 'serve -s dist -l 5173',
+      args: 'serve -s dist -l 3000',
       cwd: './frontend',
       interpreter: 'none',
 
