@@ -56,11 +56,11 @@ interface TypeMapping {
   notes?: string;
 }
 
-interface UnmappedType {
-  type: string;
-  count: number;
-  example_qids: Array<{ qid: string; title: string }>;
-}
+// interface UnmappedType {
+//   type: string;
+//   count: number;
+//   example_qids: Array<{ qid: string; title: string }>;
+// }
 
 // interface UnmappedTypesResponse {
 //   types: UnmappedType[];
