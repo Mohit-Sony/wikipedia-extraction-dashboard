@@ -24,3 +24,6 @@ tmp
 credentials.json
 token.json
 *.env
+production
+frontend/dist
+*/dist/*
