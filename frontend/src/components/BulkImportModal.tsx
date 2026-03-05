@@ -22,6 +22,7 @@ import {
   ExclamationCircleOutlined
 } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
+import { useGetUnmappedTypesQuery } from '../store/api';
 
 const { TextArea } = Input;
 const { Text, Paragraph } = Typography;
@@ -56,36 +57,19 @@ const BulkImportModal: React.FC<BulkImportModalProps> = ({
   const [textInput, setTextInput] = useState('');
   const [parsedMappings, setParsedMappings] = useState<ParsedMapping[]>([]);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
-  const [unmappedTypes, setUnmappedTypes] = useState<UnmappedType[]>([]);
   const [unmappedPage, setUnmappedPage] = useState(1);
-  const [unmappedTotal, setUnmappedTotal] = useState(0);
-  const [loadingUnmapped, setLoadingUnmapped] = useState(false);
   const unmappedPageSize = 24;
 
-  const fetchUnmappedTypes = async (page: number) => {
-    setLoadingUnmapped(true);
-    try {
-      const offset = (page - 1) * unmappedPageSize;
-      const params = new URLSearchParams({
-        limit: unmappedPageSize.toString(),
-        offset: offset.toString(),
-        sort_by: 'count',
-        sort_order: 'desc'
-      });
+  // RTK Query hook
+  const { data: unmappedData, isLoading: loadingUnmapped } = useGetUnmappedTypesQuery({
+    limit: unmappedPageSize,
+    offset: (unmappedPage - 1) * unmappedPageSize,
+    sort_by: 'count',
+    sort_order: 'desc',
+  });
 
-      const response = await fetch(`http://localhost:8002/api/v1/type-mappings/unmapped?${params}`);
-      if (!response.ok) throw new Error('Failed to fetch unmapped types');
-      const data = await response.json();
-
-      setUnmappedTypes(data.types);
-      setUnmappedTotal(data.total);
-    } catch (error) {
-      console.error('Failed to fetch unmapped types:', error);
-      message.error('Failed to load unresolved types');
-    } finally {
-      setLoadingUnmapped(false);
-    }
-  };
+  const unmappedTypes = unmappedData?.types || [];
+  const unmappedTotal = unmappedData?.total || 0;
 
   const generateUnmappedText = () => {
     return unmappedTypes.map(unmapped => {
@@ -281,14 +265,7 @@ kingdom,political_entity,,Historical kingdoms`;
 
   return (
     <div>
-      <Tabs
-        defaultActiveKey="csv"
-        onChange={(key) => {
-          if (key === 'unresolved' && unmappedTypes.length === 0) {
-            fetchUnmappedTypes(1);
-          }
-        }}
-      >
+      <Tabs defaultActiveKey="csv">
         <TabPane tab="CSV/TSV Import" key="csv">
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
             <Alert
@@ -380,21 +357,13 @@ kingdom	political_entity	Q417175	Historical states`}
                 </Text>
                 <Space>
                   <Button
-                    onClick={() => {
-                      const newPage = unmappedPage - 1;
-                      setUnmappedPage(newPage);
-                      fetchUnmappedTypes(newPage);
-                    }}
+                    onClick={() => setUnmappedPage(prev => prev - 1)}
                     disabled={unmappedPage === 1 || loadingUnmapped}
                   >
                     Previous
                   </Button>
                   <Button
-                    onClick={() => {
-                      const newPage = unmappedPage + 1;
-                      setUnmappedPage(newPage);
-                      fetchUnmappedTypes(newPage);
-                    }}
+                    onClick={() => setUnmappedPage(prev => prev + 1)}
                     disabled={unmappedPage >= Math.ceil(unmappedTotal / unmappedPageSize) || loadingUnmapped}
                   >
                     Next
@@ -417,12 +386,6 @@ kingdom	political_entity	Q417175	Historical states`}
                 disabled={unmappedTypes.length === 0 || loadingUnmapped}
               >
                 Copy to Clipboard
-              </Button>
-              <Button
-                onClick={() => fetchUnmappedTypes(unmappedPage)}
-                loading={loadingUnmapped}
-              >
-                Refresh
               </Button>
             </Space>
           </Space>

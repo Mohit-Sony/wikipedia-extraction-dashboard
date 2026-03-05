@@ -31,6 +31,13 @@ import {
 } from '@ant-design/icons';
 import BulkTypeMappingEditor from '../components/BulkTypeMappingEditor';
 import BulkImportModal from '../components/BulkImportModal';
+import {
+  useGetTypeMappingsQuery,
+  useCreateTypeMappingMutation,
+  useDeleteTypeMappingMutation,
+  useGetUnmappedTypesQuery,
+  useBulkCreateTypeMappingsMutation
+} from '../store/api';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -75,16 +82,11 @@ const APPROVED_TYPES = [
 
 const TypeMappings: React.FC = () => {
   const navigate = useNavigate();
-  const [mappings, setMappings] = useState<TypeMapping[]>([]);
-  const [unmappedTypes, setUnmappedTypes] = useState<UnmappedType[]>([]);
-  const [unmappedTotal, setUnmappedTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
   const [unmappedPage, setUnmappedPage] = useState(1);
   const unmappedPageSize = 60;
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [isBulkModalVisible, setIsBulkModalVisible] = useState(false);
   const [bulkMappings, setBulkMappings] = useState<any[]>([]);
-  const [bulkSaving, setBulkSaving] = useState(false);
   const [selectedUnmappedTypes, setSelectedUnmappedTypes] = useState<string[]>([]);
   const [isBatchUnmappedVisible, setIsBatchUnmappedVisible] = useState(false);
   const [batchTargetType, setBatchTargetType] = useState('person');
@@ -101,62 +103,24 @@ const TypeMappings: React.FC = () => {
     notes: '',
   });
 
-  useEffect(() => {
-    fetchMappings();
-    fetchUnmappedTypes();
-  }, []);
+  // RTK Query hooks
+  const { data: mappings = [], isLoading: loading } = useGetTypeMappingsQuery({});
+  const { data: unmappedData } = useGetUnmappedTypesQuery({
+    limit: unmappedPageSize,
+    offset: (unmappedPage - 1) * unmappedPageSize,
+    sort_by: 'count',
+    sort_order: 'desc',
+  });
+  const [createMapping] = useCreateTypeMappingMutation();
+  const [deleteMapping] = useDeleteTypeMappingMutation();
+  const [bulkCreateMappings, { isLoading: bulkSaving }] = useBulkCreateTypeMappingsMutation();
 
-  useEffect(() => {
-    fetchUnmappedTypes(unmappedPage);
-  }, [unmappedPage]);
+  const unmappedTypes = unmappedData?.types || [];
+  const unmappedTotal = unmappedData?.total || 0;
 
-  const fetchMappings = async () => {
+  const handleCreateMapping = async () => {
     try {
-      const response = await fetch('http://localhost:8002/api/v1/type-mappings');
-      if (!response.ok) throw new Error('Failed to fetch mappings');
-      const data = await response.json();
-      setMappings(data);
-    } catch (error) {
-      message.error('Failed to fetch type mappings');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchUnmappedTypes = async (page: number = unmappedPage) => {
-    try {
-      const offset = (page - 1) * unmappedPageSize;
-      const params = new URLSearchParams({
-        limit: unmappedPageSize.toString(),
-        offset: offset.toString(),
-        sort_by: 'count',
-        sort_order: 'desc'
-      });
-
-      const response = await fetch(`http://localhost:8002/api/v1/type-mappings/unmapped?${params}`);
-      if (!response.ok) throw new Error('Failed to fetch unmapped types');
-      const data: UnmappedTypesResponse = await response.json();
-
-      setUnmappedTypes(data.types);
-      setUnmappedTotal(data.total);
-    } catch (error) {
-      console.error('Failed to fetch unmapped types:', error);
-    }
-  };
-
-  const createMapping = async () => {
-    try {
-      const response = await fetch('http://localhost:8002/api/v1/type-mappings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newMapping),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to create mapping');
-      }
-
+      await createMapping(newMapping).unwrap();
       message.success('Type mapping created successfully');
       setIsAddModalVisible(false);
       setNewMapping({
@@ -166,30 +130,20 @@ const TypeMappings: React.FC = () => {
         is_approved: true,
         notes: '',
       });
-
-      fetchMappings();
-      fetchUnmappedTypes();
     } catch (error: any) {
-      message.error(error.message || 'Failed to create mapping');
+      message.error(error.data?.detail || 'Failed to create mapping');
     }
   };
 
-  const deleteMapping = async (id: number) => {
+  const handleDeleteMapping = async (id: number) => {
     confirm({
       title: 'Delete Type Mapping',
       icon: <ExclamationCircleOutlined />,
       content: 'Are you sure you want to delete this type mapping?',
       onOk: async () => {
         try {
-          const response = await fetch(`http://localhost:8002/api/v1/type-mappings/${id}`, {
-            method: 'DELETE',
-          });
-
-          if (!response.ok) throw new Error('Failed to delete mapping');
-
+          await deleteMapping(id).unwrap();
           message.success('Type mapping deleted successfully');
-          fetchMappings();
-          fetchUnmappedTypes();
         } catch (error) {
           message.error('Failed to delete mapping');
         }
@@ -228,26 +182,11 @@ const TypeMappings: React.FC = () => {
       return;
     }
 
-    setBulkSaving(true);
-
     try {
-      const payload = {
+      const result = await bulkCreateMappings({
         mappings: mappingsToSave,
         fail_on_error: false,
-      };
-
-      const response = await fetch('http://localhost:8002/api/v1/type-mappings/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to save mappings');
-      }
-
-      const result = await response.json();
+      }).unwrap();
 
       if (result.error_count > 0) {
         message.warning(
@@ -260,12 +199,8 @@ const TypeMappings: React.FC = () => {
       // Clear selections and refresh
       setMultiSelectMappings({});
       setIsMultiSelectMode(false);
-      fetchMappings();
-      fetchUnmappedTypes();
     } catch (error: any) {
-      message.error(error.message || 'Failed to save mappings');
-    } finally {
-      setBulkSaving(false);
+      message.error(error.data?.detail || 'Failed to save mappings');
     }
   };
 
@@ -303,10 +238,8 @@ const TypeMappings: React.FC = () => {
       return;
     }
 
-    setBulkSaving(true);
-
     try {
-      const payload = {
+      const result = await bulkCreateMappings({
         mappings: validMappings.map((m: any) => ({
           wikidata_type: m.wikidata_type,
           mapped_type: m.mapped_type,
@@ -315,20 +248,7 @@ const TypeMappings: React.FC = () => {
           is_approved: true,
         })),
         fail_on_error: false,
-      };
-
-      const response = await fetch('http://localhost:8002/api/v1/type-mappings/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to create bulk mappings');
-      }
-
-      const result = await response.json();
+      }).unwrap();
 
       if (result.error_count > 0) {
         message.warning(
@@ -340,12 +260,8 @@ const TypeMappings: React.FC = () => {
 
       setIsBulkModalVisible(false);
       setBulkMappings([]);
-      fetchMappings();
-      fetchUnmappedTypes();
     } catch (error: any) {
-      message.error(error.message || 'Failed to create bulk mappings');
-    } finally {
-      setBulkSaving(false);
+      message.error(error.data?.detail || 'Failed to create bulk mappings');
     }
   };
 
@@ -355,40 +271,22 @@ const TypeMappings: React.FC = () => {
       return;
     }
 
-    setBulkSaving(true);
-
     try {
-      const payload = {
+      const result = await bulkCreateMappings({
         mappings: selectedUnmappedTypes.map((type) => ({
           wikidata_type: type,
           mapped_type: batchTargetType,
           is_approved: true,
         })),
         fail_on_error: false,
-      };
+      }).unwrap();
 
-      const response = await fetch('http://localhost:8002/api/v1/type-mappings/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to create batch mappings');
-      }
-
-      const result = await response.json();
       message.success(`Successfully mapped ${result.success_count} types to ${batchTargetType}`);
 
       setIsBatchUnmappedVisible(false);
       setSelectedUnmappedTypes([]);
-      fetchMappings();
-      fetchUnmappedTypes();
     } catch (error: any) {
-      message.error(error.message || 'Failed to create batch mappings');
-    } finally {
-      setBulkSaving(false);
+      message.error(error.data?.detail || 'Failed to create batch mappings');
     }
   };
 
@@ -445,7 +343,7 @@ const TypeMappings: React.FC = () => {
           type="text"
           danger
           icon={<DeleteOutlined />}
-          onClick={() => deleteMapping(record.id)}
+          onClick={() => handleDeleteMapping(record.id)}
         />
       ),
     },
@@ -672,7 +570,7 @@ const TypeMappings: React.FC = () => {
       <Modal
         title="Create New Type Mapping"
         open={isAddModalVisible}
-        onOk={createMapping}
+        onOk={handleCreateMapping}
         onCancel={() => {
           setIsAddModalVisible(false);
           setNewMapping({

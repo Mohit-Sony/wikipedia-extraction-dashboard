@@ -27,6 +27,7 @@ import {
   FullscreenOutlined,
   FullscreenExitOutlined
 } from '@ant-design/icons';
+import { useGetUnmappedTypesQuery, useBulkCreateTypeMappingsMutation } from '../store/api';
 
 const { Header, Content, Sider } = Layout;
 const { Title, Text } = Typography;
@@ -213,7 +214,6 @@ const DropZoneColumn: React.FC<{
 
 const BulkTypeMappingPage: React.FC = () => {
   const navigate = useNavigate();
-  const [unmappedTypes, setUnmappedTypes] = useState<UnmappedType[]>([]);
   const [availableItems, setAvailableItems] = useState<MappingItem[]>([]);
   const [mappedItems, setMappedItems] = useState<Record<string, DroppedItem[]>>({
     person: [],
@@ -225,35 +225,26 @@ const BulkTypeMappingPage: React.FC = () => {
     other: [],
   });
   const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [history, setHistory] = useState<Array<typeof mappedItems>>([]);
 
+  // RTK Query hooks
+  const { data: unmappedData, isLoading: loading } = useGetUnmappedTypesQuery({});
+  const [bulkCreateMappings, { isLoading: saving }] = useBulkCreateTypeMappingsMutation();
+
+  const unmappedTypes = unmappedData?.types || [];
+
   useEffect(() => {
-    fetchUnmappedTypes();
-  }, []);
-
-  const fetchUnmappedTypes = async () => {
-    try {
-      const response = await fetch('http://localhost:8002/api/v1/type-mappings/unmapped');
-      if (!response.ok) throw new Error('Failed to fetch unmapped types');
-      const data = await response.json();
-      setUnmappedTypes(data);
-
-      const items = data.map((ut: UnmappedType) => ({
+    if (unmappedTypes.length > 0) {
+      const items = unmappedTypes.map((ut: UnmappedType) => ({
         type: ut.type,
         count: ut.count,
         examples: ut.example_qids,
         originalData: ut,
       }));
       setAvailableItems(items);
-    } catch (error) {
-      message.error('Failed to fetch unmapped types');
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [unmappedTypes]);
 
   const handleDrop = useCallback((item: MappingItem, targetType: string) => {
     // Check if already in this category
@@ -378,31 +369,18 @@ const BulkTypeMappingPage: React.FC = () => {
       title: `Save ${allMappings.length} Type Mappings?`,
       content: 'This will create type mappings for all items you have organized.',
       onOk: async () => {
-        setSaving(true);
         try {
-          const response = await fetch('http://localhost:8002/api/v1/type-mappings/bulk', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              mappings: allMappings,
-              fail_on_error: false,
-            }),
-          });
+          const result = await bulkCreateMappings({
+            mappings: allMappings,
+            fail_on_error: false,
+          }).unwrap();
 
-          if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Failed to save mappings');
-          }
-
-          const result = await response.json();
           message.success(`Successfully saved ${result.success_count} type mappings`);
 
           // Navigate back
           navigate('/type-mappings');
         } catch (error: any) {
-          message.error(error.message || 'Failed to save mappings');
-        } finally {
-          setSaving(false);
+          message.error(error.data?.detail || 'Failed to save mappings');
         }
       },
     });

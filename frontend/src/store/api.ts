@@ -380,6 +380,79 @@ export const api = createApi({
       providesTags: ['TypeMapping'],
     }),
 
+    createTypeMapping: builder.mutation<TypeMapping, {
+      wikidata_type: string;
+      mapped_type: string;
+      wikidata_qid?: string;
+      is_approved?: boolean;
+      notes?: string;
+    }>({
+      query: (data) => ({
+        url: 'type-mappings',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['TypeMapping'],
+    }),
+
+    deleteTypeMapping: builder.mutation<{ message: string }, number>({
+      query: (id) => ({
+        url: `type-mappings/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['TypeMapping'],
+    }),
+
+    getUnmappedTypes: builder.query<{
+      types: Array<{
+        type: string;
+        count: number;
+        example_qids: Array<{ qid: string; title: string }>;
+      }>;
+      total: number;
+      limit: number;
+      offset: number;
+      has_more: boolean;
+    }, {
+      limit?: number;
+      offset?: number;
+      sort_by?: string;
+      sort_order?: string;
+    }>({
+      query: ({ limit = 60, offset = 0, sort_by = 'count', sort_order = 'desc' } = {}) => {
+        const params = new URLSearchParams({
+          limit: limit.toString(),
+          offset: offset.toString(),
+          sort_by,
+          sort_order,
+        });
+        return `type-mappings/unmapped?${params.toString()}`;
+      },
+      providesTags: ['TypeMapping'],
+    }),
+
+    bulkCreateTypeMappings: builder.mutation<{
+      success_count: number;
+      error_count: number;
+      errors: Array<{ wikidata_type: string; error: string }>;
+    }, {
+      mappings: Array<{
+        wikidata_type: string;
+        mapped_type: string;
+        wikidata_qid?: string;
+        notes?: string;
+        is_approved?: boolean;
+      }>;
+      fail_on_error?: boolean;
+    }>({
+      query: (data) => ({
+        url: 'type-mappings/bulk',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['TypeMapping'],
+    }),
+
     // ===== EXISTING ANALYTICS ENDPOINTS (unchanged) =====
     getDashboardStats: builder.query<DashboardStats, void>({
       query: () => 'analytics/dashboard',
@@ -509,6 +582,10 @@ export const {
 
   // ===== TYPE MAPPING HOOKS =====
   useGetTypeMappingsQuery,
+  useCreateTypeMappingMutation,
+  useDeleteTypeMappingMutation,
+  useGetUnmappedTypesQuery,
+  useBulkCreateTypeMappingsMutation,
 
   // ===== EXISTING ANALYTICS HOOKS (unchanged) =====
   useGetDashboardStatsQuery,
