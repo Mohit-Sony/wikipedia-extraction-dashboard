@@ -37,11 +37,11 @@ interface ParsedMapping {
   error?: string;
 }
 
-interface UnmappedType {
-  type: string;
-  count: number;
-  example_qids: Array<{ qid: string; title: string }>;
-}
+// interface UnmappedType {
+//   type: string;
+//   count: number;
+//   example_qids: Array<{ qid: string; title: string }>;
+// }
 
 interface BulkImportModalProps {
   approvedTypes: string[];

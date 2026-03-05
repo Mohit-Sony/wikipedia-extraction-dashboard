@@ -1,5 +1,5 @@
 // frontend/src/pages/TypeMappings.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Card,
@@ -62,13 +62,13 @@ interface UnmappedType {
   example_qids: Array<{ qid: string; title: string }>;
 }
 
-interface UnmappedTypesResponse {
-  types: UnmappedType[];
-  total: number;
-  limit: number;
-  offset: number;
-  has_more: boolean;
-}
+// interface UnmappedTypesResponse {
+//   types: UnmappedType[];
+//   total: number;
+//   limit: number;
+//   offset: number;
+//   has_more: boolean;
+// }
 
 const APPROVED_TYPES = [
   'person',
